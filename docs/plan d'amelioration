@@ -1,0 +1,174 @@
+Plan d'amélioration du job-aggregator (Mise à jour)
+
+### Étape 1 : Amélioration du scraping et de l'extraction des données
+- Revoir le prompt d'extraction pour demander explicitement TOUTES les informations utiles (titre, entreprise, description complète, compétences, salaire, etc.).
+- S'assurer que la description n'est jamais tronquée (récupérer l'intégralité du texte, y compris les listes à puces).
+- Ajouter des logs pour chaque champ non extrait afin de détecter les faiblesses du scraping.
+- Mettre en place des fallback : si un champ n'est pas trouvé dans une balise dédiée, tenter de l'extraire du texte brut (description).
+- Ajouter des valeurs par défaut pour les champs critiques (ex : "Non renseigné", "À négocier").
+
+### Étape 2 : Enrichissement et nettoyage des données via LLM
+- Utiliser le LLM pour reformuler et enrichir chaque offre (SEO, lisibilité, mots-clés, résumé, etc.).
+- Générer un résumé court et attrayant pour chaque offre.
+- Standardiser les formats (dates, types de contrat, localisations).
+- Compléter les champs manquants à partir de la description si possible (extraction intelligente).
+- Corriger les fautes et améliorer la structure du texte.
+
+### Étape 3 : Normalisation et post-traitement
+- Harmoniser les noms de villes, types de contrat, etc. (normalisation).
+- Script de nettoyage pour enrichir les offres déjà présentes en base.
+- Ajouter des tags/catégories automatiquement selon le contenu.
+
+### Étape 4 : Affichage frontend et gestion des valeurs manquantes
+- Toujours afficher une valeur lisible côté frontend (jamais "null").
+- Mettre en avant les offres les plus complètes.
+- Adapter les filtres pour refléter la réalité des données (ex : villes du Togo, types de contrat locaux).
+
+### Étape 5 : Optimisation SEO selon les dernières recommandations Google
+- Générer des meta_title, meta_description et keywords optimisés pour chaque offre.
+- S'assurer que la structure HTML/JSON respecte les bonnes pratiques SEO (données structurées, balises, etc.).
+- Se tenir informé des dernières mises à jour SEO Google et adapter les prompts/traitements en conséquence.
+
+---
+
+**Chaque étape sera traitée et validée avant de passer à la suivante.**
+
+Je comprends parfaitement vos besoins. Voici un plan d'implémentation étape par étape qui intègre toutes vos demandes, structuré de manière logique:
+
+1. Système de suivi temporel des offres
+D'abord, implémentons un mécanisme pour ne scraper que les nouvelles offres:
+
+python
+CopyInsert
+# Ajouter dans la structure de données des offres
+"scrape_timestamp": datetime.now().isoformat(),  # Quand l'offre a été scrapée
+"publish_date_parsed": parsed_date,  # Date de publication normalisée
+Stockage des timestamps du dernier scraping par site
+Comparaison des dates de publication pour filtrer uniquement les nouvelles offres
+Vérification des URLs déjà traitées dans la base de données
+2. Parallélisation contrôlée
+Pour accélérer le traitement sans surcharger les sites:
+
+python
+CopyInsert
+# Utilisation de asyncio.gather avec limitation
+async def process_detail_pages_in_parallel(offers, max_concurrent=3):
+    semaphore = asyncio.Semaphore(max_concurrent)
+    
+    async def process_with_limit(offer):
+        async with semaphore:
+            return await process_detail_page(offer)
+    
+    tasks = [process_with_limit(offer) for offer in offers]
+    return await asyncio.gather(*tasks)
+Contrôle du nombre de requêtes simultanées par semaphore
+Surveillance de la charge pour éviter le blocage des sites sources
+Timeouts et retries intelligents
+3. Système de cache
+Pour éviter les requêtes redondantes:
+
+python
+CopyInsert
+# Système de cache à deux niveaux
+# 1. Cache mémoire pour la session courante
+detail_page_cache = {}  # URL -> contenu HTML + timestamp
+
+# 2. Cache persistant (fichier ou base de données)
+async def get_cached_or_fetch(url, max_age_hours=24):
+    # Vérifier cache mémoire puis cache persistant
+    # Si absent ou trop ancien, fetch et mettre à jour les caches
+Cache basé sur l'URL et un hash du contenu
+Expiration configurable des données en cache
+Stockage optionnel des données HTML et des résultats extraits
+4. Amélioration des données par LLM
+Pour enrichir et standardiser les offres:
+
+python
+CopyInsert
+async def enhance_job_offer(job_offer):
+    prompt = f"""
+    Améliore cette offre d'emploi pour le SEO et la lisibilité:
+    {json.dumps(job_offer, indent=2)}
+    
+    1. Standardise les formats de date
+    2. Enrichis la description avec des mots-clés pertinents
+    3. Ajoute des tags/catégories basés sur le contenu
+    4. Corrige les fautes éventuelles
+    5. Reformule légèrement tout en conservant les informations essentielles
+    """
+    
+    enhanced_data = await extract_with_custom_llm(
+        html_content=None, 
+        prompt=prompt,
+        text_content=json.dumps(job_offer),
+        site_name="enhancement",
+        config=global_config
+    )
+    
+    return enhanced_data
+Enrichissement du texte pour améliorer le SEO
+Standardisation des formats (dates, localisations, types de contrat)
+Génération de résumés courts et attrayants pour les aperçus
+Reformulation légère pour différencier du contenu original
+5. Affinage des prompts d'extraction
+Pour une meilleure précision des données extraites:
+
+python
+CopyInsert
+# Prompt plus précis pour l'extraction de détails
+detail_page_prompt = """
+Je vais te fournir le code HTML d'une page de détail d'une offre d'emploi.
+Tu dois extraire TOUTES les informations suivantes au format JSON:
+
+1. Titre du poste (title): Exactement comme affiché, avec tous les détails
+2. Entreprise (company): Nom officiel de l'entreprise qui recrute
+3. Localisation (location): Ville, région ou pays spécifié
+4. Description (description): Description COMPLÈTE du poste, missions, responsabilités
+5. Date de publication (date_posted): Date EXACTE au format JJ/MM/AAAA si possible
+6. Type de contrat (contract_type): CDI, CDD, Stage, Freelance, etc.
+7. Compétences requises (skills): Liste des compétences demandées
+8. Niveau d'études (education): Niveau d'études requis
+9. Expérience (experience): Années d'expérience requises
+10. Salaire (salary): Information sur la rémunération si disponible
+11. URL de candidature (apply_url): Lien direct pour postuler
+
+Pour chaque champ, si l'information n'est pas disponible, utilise null.
+IMPORTANT: Conserve TOUS les détails de la description, y compris les listes à puces.
+"""
+Prompts plus spécifiques et détaillés
+Instructions claires sur le format attendu
+Exemples pour guider le modèle
+Demande explicite de certains formats standards
+6. Structure pour l'export vers un site web
+Pour faciliter le partage des offres:
+
+python
+CopyInsert
+# Structure de données pour l'export
+export_schema = {
+    "job_offers": [
+        {
+            "id": "unique_id",
+            "title": "Titre optimisé pour SEO",
+            "slug": "titre-optimise-pour-seo", 
+            "summary": "Résumé court et attrayant",
+            "company": "Nom de l'entreprise",
+            "location": "Localisation",
+            "description_html": "<p>Description formatée en HTML</p>",
+            "publish_date": "2025-05-30",
+            "expiry_date": "2025-06-30",  # Date d'expiration calculée
+            "job_type": "CDI",
+            "categories": ["Informatique", "Développement"],
+            "seo": {
+                "meta_title": "Titre SEO optimisé",
+                "meta_description": "Description SEO optimisée",
+                "keywords": ["mot-clé1", "mot-clé2"]
+            },
+            "source": {
+                "name": "emploitogo",
+                "url": "https://www.emploitogo.info/...",
+                "scrape_date": "2025-05-30T12:34:56"
+            }
+        }
+    ]
+}

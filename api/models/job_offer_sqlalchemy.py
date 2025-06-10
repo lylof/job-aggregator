@@ -1,0 +1,35 @@
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column, Integer, String, Text, TIMESTAMP, Boolean, ARRAY
+
+Base = declarative_base()
+
+class JobOffer(Base):
+    __tablename__ = "job_offers"
+    id = Column(Integer, primary_key=True)
+    url = Column(String(1024), nullable=False)
+    title = Column(String(512), nullable=False)
+    company = Column(String(256))
+    location = Column(String(256))
+    date_posted = Column(String(128))
+    contract_type = Column(String(128))
+    source = Column(String(128), nullable=False)
+    source_page_url = Column(String(1024))
+    description = Column(Text)
+    apply_url = Column(String(1024))
+    publish_date_parsed = Column(TIMESTAMP(timezone=True))
+    scrape_timestamp = Column(String(128))
+    is_new = Column(Boolean, default=True)
+    created_at = Column(TIMESTAMP(timezone=True))
+    updated_at = Column(TIMESTAMP(timezone=True))
+    company_logo = Column(String(1024))
+    salary = Column(String(255))
+    required_skills = Column(ARRAY(Text))
+    required_experience = Column(String(255))
+    education_level = Column(String(255))
+    application_deadline = Column(String(255))
+    slug = Column(String(255))
+    summary = Column(Text)
+    keywords = Column(ARRAY(Text))
+    contract_type_normalized = Column(String(50))
+    tags = Column(Text)
+    date_posted_local = Column(TIMESTAMP(timezone=True)) 

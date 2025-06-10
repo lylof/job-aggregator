@@ -1,0 +1,422 @@
+Okay, here's a step-by-step tutorial on how to set up a web scraper with Crawl4AI using LLMs, based on the provided video:
+
+LLM-Powered Web Scraping with Crawl4AI: A Step-by-Step Tutorial
+
+This tutorial walks you through setting up Crawl4AI, an open-source LLM-friendly web crawler and scraper, to extract structured data from web pages using Large Language Models (LLMs) like DeepSeek and Gemini.
+
+1. Introduction to Web Scraping and Crawl4AI
+
+Web scraping is the process of extracting data from websites. While traditional methods often struggle with modern, dynamic websites, LLM-powered scrapers can understand and extract information more intelligently.
+
+Crawl4AI is a Python library designed for this purpose. It can convert web content into a clean format (like Markdown) suitable for LLMs and then use an LLM to extract structured data based on your instructions.
+
+2. Prerequisites
+
+Python (the video uses Python 3.10)
+
+A virtual environment (recommended)
+
+API keys for the LLMs you intend to use (e.g., DeepSeek, Google Gemini)
+
+3. Step-by-Step Setup
+
+a. Create and Activate a Virtual Environment
+
+It's good practice to create a virtual environment for your project. If you're using Conda:
+
+conda create -n crawl4ai_env python=3.10
+conda activate crawl4ai_env
+
+
+If you're using venv:
+
+python -m venv crawl4ai_env
+source crawl4ai_env/bin/activate  # On Windows: crawl4ai_env\Scripts\activate
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+Bash
+IGNORE_WHEN_COPYING_END
+
+b. Install Necessary Python Packages
+
+Install Crawl4AI and other required libraries:
+
+pip install crawl4ai openai pydantic python-dotenv playwright
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+Bash
+IGNORE_WHEN_COPYING_END
+
+crawl4ai: The main library.
+
+openai: Often used by libraries like LiteLLM (which Crawl4AI can use) to provide a common interface for various LLMs.
+
+pydantic: For data validation and schema definition.
+
+python-dotenv: To manage API keys securely using a .env file.
+
+playwright: For browser automation to render web pages.
+
+c. Install Playwright Browsers
+
+After installing the playwright Python package, you need to install the browser binaries it uses:
+
+playwright install
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+Bash
+IGNORE_WHEN_COPYING_END
+
+This command downloads the necessary browser engines (like Chromium, Firefox, WebKit). Crawl4AI uses these to render pages.
+
+4. Core Script Structure
+
+Create a Python file (e.g., web_scraper.py).
+
+a. Imports
+
+import os
+import json
+import asyncio
+from pydantic import BaseModel, Field
+from dotenv import load_dotenv
+from crawl4ai import AsyncWebCrawler
+from crawl4ai.config import BrowserConfig, CrawlerRunConfig, CacheMode, LLMConfig
+from crawl4ai.extraction_strategy import LLMExtractionStrategy
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+Python
+IGNORE_WHEN_COPYING_END
+
+b. Load Environment Variables
+Create a .env file in your project root to store your API keys:
+
+DEEPSEEK_API_KEY="your_deepseek_api_key"
+GEMINI_API_KEY="your_gemini_api_key"
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+IGNORE_WHEN_COPYING_END
+
+Load these into your script:
+
+load_dotenv()
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+Python
+IGNORE_WHEN_COPYING_END
+
+c. Define Target URL
+
+URL_TO_SCRAPE = "https://web.lmarena.ai/leaderboard/" # Example from the video
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+Python
+IGNORE_WHEN_COPYING_END
+5. Defining the Data Schema (Pydantic Model)
+
+Define the structure of the data you want to extract. This helps the LLM return data in a consistent format.
+
+class LeaderboardEntry(BaseModel):
+    rank: int = Field(..., description="Position in the list")
+    model_name: str = Field(..., description="Full name of the model, e.g., Claude 3.7 Sonnet (20250219)")
+    score: float
+    ci: str # Confidence Interval, e.g., "+/- 17.16 / -15.68"
+    votes: int
+    org: str
+    license: str
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+Python
+IGNORE_WHEN_COPYING_END
+6. Crafting LLM Instructions
+
+Tell the LLM what page it's looking at, what to extract, and the desired output format.
+
+INSTRUCTION_TO_LLM = """
+You are given an LLM leaderboard page.
+Return an array of model objects (rank, model_name, score, ci, votes, org, license).
+For model_name, extract the complete name e.g. Claude 3.7 Sonnet (20250219) instead of just "Anthropic".
+Return **only** valid JSON matching the schema - no markdown.
+"""
+```*Note: The effectiveness of the prompt can vary between LLMs. You might need to adjust it.*
+
+### 7. Configuring the LLM (`LLMConfig`)
+
+Crawl4AI uses `LLMConfig` to set up the LLM provider. It leverages LiteLLM for broad compatibility.
+
+**Example for DeepSeek:**
+```python
+llm_cfg_deepseek = LLMConfig(
+    provider="deepseek/deepseek-chat",  # Model name included in provider for LiteLLM
+    api_token=os.getenv('DEEPSEEK_API_KEY'),
+    base_url="https://api.deepseek.com/v1" # Specific to DeepSeek
+)
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+Python
+IGNORE_WHEN_COPYING_END
+
+Example for Gemini Flash:
+
+llm_cfg_gemini = LLMConfig(
+    provider="gemini/gemini-2.5-flash-preview-05-20", # Model name included
+    api_token=os.getenv('GEMINI_API_KEY')
+    # base_url is often not needed if LiteLLM uses the default provider endpoint
+)
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+Python
+IGNORE_WHEN_COPYING_END
+
+Choose one configuration to use for your llm_strategy.
+
+8. Configuring the Extraction Strategy (LLMExtractionStrategy)
+
+This defines how the LLM will be used for extraction.
+
+# Choose your LLM config
+current_llm_cfg = llm_cfg_gemini # or llm_cfg_deepseek
+
+llm_strategy = LLMExtractionStrategy(
+    llm_config=current_llm_cfg,
+    schema=LeaderboardEntry.model_json_schema(), # Pass the Pydantic schema
+    extraction_type="schema", # Instructs LLM to output based on the schema
+    instruction=INSTRUCTION_TO_LLM,
+    chunk_token_threshold=1000, # For large pages, content is split into chunks
+    apply_chunking=True,
+    overlap_rate=0.0, # How much overlap between chunks
+    input_format="markdown" # Crawl4AI converts HTML to Markdown for the LLM
+)
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+Python
+IGNORE_WHEN_COPYING_END
+9. Configuring the Crawler (CrawlerRunConfig & BrowserConfig)
+
+Browser Configuration:
+
+browser_cfg = BrowserConfig(
+    headless=True, # Run browser in the background
+    verbose=True,  # For more detailed logging from Crawl4AI
+    text_mode=True # Tries to get a text-based representation
+)
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+Python
+IGNORE_WHEN_COPYING_END
+
+Crawler Run Configuration:
+
+crawl_cfg = CrawlerRunConfig(
+    extraction_strategy=llm_strategy,
+    cache_mode=CacheMode.BYPASS, # Or .USE_CACHE, .REFRESH_CACHE
+    remove_overlay_elements=True, # Attempts to remove popups, banners
+    exclude_external_links=True # Prevents crawling other websites
+)
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+Python
+IGNORE_WHEN_COPYING_END
+10. Running the Crawler
+
+Crawl4AI uses asyncio for asynchronous operations.
+
+async def main():
+    async with AsyncWebCrawler(config=browser_cfg) as crawler:
+ симптоматика.extracted_content)"
+                    print(f"Extracted {len(data)} items:")
+                    for entry_data in data[:10]: # Print first 10 items
+                        # Validate with Pydantic (optional but good practice)
+                        try:
+                            entry = LeaderboardEntry(**entry_data)
+                            print(entry.model_dump_json(indent=2))
+                        except Exception as e:
+                            print(f"Error validating entry: {entry_data}, Error: {e}")
+                else:
+                    print(f"Error: {result.error_message}")
+
+                # To see token usage (if supported by LLMConfig and strategy)
+                # print(llm_strategy.show_usage())
+
+if __name__ == "__main__":
+    asyncio.run(main())
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+Python
+IGNORE_WHEN_COPYING_END
+11. Processing Results
+
+The result.extracted_content will contain the JSON string from the LLM if successful. You can parse this using json.loads() and then optionally validate each item with your Pydantic model.
+
+12. Key Considerations
+
+Cost: LLM-based scraping can be expensive, especially at scale. The video mentions an example where scraping one page multiple times cost 8 cents using DeepSeek due to ~150,000 tokens used over ~25 requests. Monitor token usage.
+
+Performance & Rate Limits: Different LLMs have different speeds and rate limits. Gemini Flash was shown to be significantly faster than DeepSeek V3 (which was rate-limited in the video).
+
+Prompt Engineering: The quality of extraction heavily depends on your instructions to the LLM. Prompts that work well for one LLM might need adjustments for another. Be specific.
+
+Data Validation: Always validate the extracted data. LLMs can hallucinate or return data in an unexpected format, even with schema instructions.
+
+Crawl4AI Features:
+
+Crawl4AI can convert pages to clean Markdown, which is beneficial even if you plan to use LLMs.
+
+It has features for CSS-based extraction if you don't want to use an LLM for every scrape.
+
+It supports caching, which can save costs and time on repeated crawls.
+
+Chunking: For very long pages, Crawl4AI will split the content into chunks to fit within the LLM's context window. The chunk_token_threshold parameter controls this.
+
+13. Full Example Code Snippet
+import os
+import json
+import asyncio
+from pydantic import BaseModel, Field
+from dotenv import load_dotenv
+from crawl4ai import AsyncWebCrawler
+from crawl4ai.config import BrowserConfig, CrawlerRunConfig, CacheMode, LLMConfig
+from crawl4ai.extraction_strategy import LLMExtractionStrategy
+
+# --- 1. Load Environment Variables ---
+load_dotenv()
+
+# --- 2. Define URL ---
+URL_TO_SCRAPE = "https://web.lmarena.ai/leaderboard/"
+
+# --- 3. Define Pydantic Schema ---
+class LeaderboardEntry(BaseModel):
+    rank: int = Field(..., description="Position in the list")
+    model_name: str = Field(..., description="Full name of the model, e.g., Claude 3.7 Sonnet (20250219)")
+    score: float
+    ci: str # Confidence Interval
+    votes: int
+    org: str
+    license: str
+
+# --- 4. LLM Instructions ---
+INSTRUCTION_TO_LLM = """
+You are given an LLM leaderboard page.
+Return an array of model objects (rank, model_name, score, ci, votes, org, license).
+For model_name, extract the complete name e.g. Claude 3.7 Sonnet (20250219) instead of just "Anthropic".
+Return **only** valid JSON matching the schema - no markdown.
+"""
+
+# --- 5. Configure LLM ---
+# Option 1: DeepSeek
+# llm_cfg = LLMConfig(
+#     provider="deepseek/deepseek-chat",
+#     api_token=os.getenv('DEEPSEEK_API_KEY'),
+#     base_url="https://api.deepseek.com/v1"
+# )
+
+# Option 2: Gemini Flash (Recommended for speed and cost if DeepSeek is slow)
+llm_cfg = LLMConfig(
+    provider="gemini/gemini-2.5-flash-preview-05-20",
+    api_token=os.getenv('GEMINI_API_KEY')
+)
+
+# --- 6. Configure Extraction Strategy ---
+llm_strategy = LLMExtractionStrategy(
+    llm_config=llm_cfg,
+    schema=LeaderboardEntry.model_json_schema(),
+    extraction_type="schema",
+    instruction=INSTRUCTION_TO_LLM,
+    chunk_token_threshold=1000,
+    apply_chunking=True,
+    overlap_rate=0.0,
+    input_format="markdown"
+)
+
+# --- 7. Configure Browser and Crawler ---
+browser_cfg = BrowserConfig(
+    headless=True,
+    verbose=False, # Set to True for more Crawl4AI logs
+    text_mode=True
+)
+
+crawl_cfg = CrawlerRunConfig(
+    extraction_strategy=llm_strategy,
+    cache_mode=CacheMode.BYPASS,
+    remove_overlay_elements=True,
+    exclude_external_links=True,
+    verbose=True # For more detailed crawl logs
+)
+
+# --- 8. Run the Crawler ---
+async def main():
+    print(f"Starting crawl for {URL_TO_SCRAPE} using LLM: {llm_cfg.provider}")
+    async with AsyncWebCrawler(config=browser_cfg) as crawler:
+        result = await crawler.arun(URL_TO_SCRAPE, config=crawl_cfg)
+
+        if result.success and result.extracted_content:
+            try:
+                data = json.loads(result.extracted_content)
+                if isinstance(data, list):
+                    print(f"\nSuccessfully extracted {len(data)} items:")
+                    for i, item_data in enumerate(data[:10]): # Print first 10 items
+                        try:
+                            entry = LeaderboardEntry(**item_data)
+                            print(f"\n--- Item {i+1} ---")
+                            print(entry.model_dump_json(indent=2))
+                        except Exception as e_pydantic:
+                            print(f"\n--- Item {i+1} (Validation Error) ---")
+                            print(f"Pydantic validation error: {e_pydantic}")
+                            print(f"Raw data: {item_data}")
+                else:
+                    print(f"\nExtracted content is not a list: {result.extracted_content}")
+
+            except json.JSONDecodeError:
+                print(f"\nError: Failed to decode JSON from extracted content.")
+                print(f"Raw extracted content: {result.extracted_content}")
+        elif result.success and not result.extracted_content:
+             print("\nCrawl successful, but no content was extracted by the LLM.")
+        else:
+            print(f"\nError during crawl: {result.error_message}")
+
+        # For token cost insights (if available and enabled in strategy)
+        # if hasattr(llm_strategy, 'show_usage'):
+        #     print("\nLLM Usage Stats:")
+        #     print(llm_strategy.show_usage())
+
+if __name__ == "__main__":
+    # If you encounter issues with Playwright not finding browsers,
+    # you might need to run this once in your terminal:
+    # playwright install
+    asyncio.run(main())
+IGNORE_WHEN_COPYING_START
+content_copy
+download
+Use code with caution.
+Python
+IGNORE_WHEN_COPYING_END
+
+This tutorial provides a solid foundation for using Crawl4AI with LLMs. Remember to adapt the schema, instructions, and LLM configurations to your specific target website and data requirements. Experimentation with prompts is key to achieving reliable results.

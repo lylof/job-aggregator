@@ -1,0 +1,1796 @@
+# Documentation Complète et Enrichie
+
+## Plateforme d’Agrégation d’Offres d’Emploi – Version Mise à Jour
+
+---
+
+## Table des Matières
+
+1. [Introduction & Contexte](#1-introduction--contexte)
+2. [Objectifs du MVP](#2-objectifs-du-mvp)
+3. [Architecture Globale](#3-architecture-globale)
+
+   1. [Schéma de principe](#31-schéma-de-principe)
+   2. [Flux de Données : Scraping → API → Bots](#32-flux-de-données--scraping----api----bots)
+4. [Composants Techniques](#4-composants-techniques)
+
+   1. [Module 1 : Scraping (Crawl4AI)](#41-module-1--scraping-crawl4ai)
+   2. [Module 2 : Base de Données](#42-module-2--base-de-données)
+   3. [Module 3 : API & Mini-Site Web](#43-module-3--api--mini-site-web)
+   4. [Module 4 : Bots de Diffusion (Telegram, WhatsApp, Twitter…)](#44-module-4--bots-de-diffusion-telegram-whatsapp-twitter)
+   5. [Module 5 : Bot Admin (Alertes & Monitoring)](#45-module-5--bot-admin-alertes--monitoring)
+5. [Exemples de Configuration](#5-exemples-de-configuration)
+
+   1. [Docker Compose : `docker-compose.yml`](#51-docker-compose--docker-composeyml)
+   2. [Exemple de `Dockerfile` pour Crawl4AI](#52-exemple-de-dockerfile-pour-crawl4ai)
+   3. [Exemple de Script (run\_crawl4ai.py)](#53-exemple-de-script-run_crawl4aipy)
+   4. [Exemple de Dockerfile pour l’API FastAPI](#54-exemple-de-dockerfile-pour-lapi-fastapi)
+   5. [Exemple de Code pour le Bot Telegram “Offres”](#55-exemple-de-code-pour-le-bot-telegram-offres)
+   6. [Exemple de Code pour le Bot WhatsApp (Twilio)](#56-exemple-de-code-pour-le-bot-whatsapp-twilio)
+6. [Plan de Déploiement & Mise en Œuvre](#6-plan-de-déploiement--mise-en-œuvre)
+
+   1. [Préparation du VPS](#61-préparation-du-vps)
+   2. [Installation de Docker & Docker Compose](#62-installation-de-docker--docker-compose)
+   3. [Structure des Répertoires](#63-structure-des-répertoires)
+   4. [Configuration du Cron](#64-configuration-du-cron)
+   5. [Déploiement Frontend sur Vercel](#65-déploiement-frontend-sur-vercel)
+7. [Gestion du Stockage & Base de Données](#7-gestion-du-stockage--base-de-données)
+
+   1. [Schéma de la Base `offers`](#71-schéma-de-la-base-offers)
+   2. [Migration SQLite → PostgreSQL (Phase 2)](#72-migration-sqlite--postgresql-phase-2)
+8. [Surveillance, Logs & Alerte](#8-surveillance-logs--alerte)
+
+   1. [Logs Docker & Heap](#81-logs-docker--heap)
+   2. [Bot Admin : Mécanisme d’Alerte](#82-bot-admin--mécanisme-dalerte)
+   3. [Healthchecks & Redémarrage Automatique](#83-healthchecks--redémarrage-automatique)
+9. [Estimation des Ressources & Coûts](#9-estimation-des-ressources--coûts)
+
+   1. [Usage Mémoire et CPU](#91-usage-mémoire-et-cpu)
+   2. [Bande Passante & Stockage](#92-bande-passante--stockage)
+   3. [Budget Mensuel](#93-budget-mensuel)
+10. [Roadmap & Phases d’Évolution](#10-roadmap--phases-dévolution)
+
+    1. [Phase 1 : MVP Essentiel](#101-phase-1--mvp-essentiel)
+    2. [Phase 2 : Améliorations IA & Performance](#102-phase-2--améliorations-ia--performance)
+    3. [Phase 3 : Extensions & Modules Premium](#103-phase-3--extensions--modules-premium)
+11. [Annexes & Ressources Utiles](#11-annexes--ressources-utiles)
+
+    1. [Prompts IA Recommandés](#111-prompts-ia-recommandés)
+    2. [Bibliothèque & Dépôts GitHub Conseillés](#112-bibliothèque--dépôts-github-conseillés)
+    3. [Checklist de Validation](#113-checklist-de-validation)
+
+---
+
+## 1. Introduction & Contexte
+
+Tu développes un **MVP de plateforme d’agrégation d’offres d’emploi**.
+L’enjeu est de récupérer automatiquement les nouvelles offres publiées sur plusieurs sites (minimum 15), de les stocker en base, de les exposer via un mini-site web, puis de diffuser ces offres sur des canaux externes (Telegram, WhatsApp, Twitter…).
+
+> **Contraintes clés** :
+>
+> * **Ressources limitées** : VPS VLE-2 à 2 vCores / 2 Go RAM / 40 Go NVMe (4,25 € HT/mois).
+> * **Automatisation “bout en bout”** : le scraper doit fonctionner 4×/jour, stocker en base, l’API doit toujours être à jour, et les bots se contentent de consommer l’API (sans accès direct à la base).
+> * **Adaptabilité** : les sites d’offres évoluent régulièrement, il faut minimiser la maintenance manuelle.
+> * **Coût minimal** : préférer des solutions open source et gratuites, utiliser des modèles LLM gratuits (Gemini, Qwen, DeepSeek via OpenRouter).
+
+Nous adoptons donc une architecture **modulaire** en 5 composants principaux :
+
+1. **Scraping (Crawl4AI)**
+2. **Base de données (SQLite → PostgreSQL)**
+3. **API / Mini-site Web (FastAPI + Next.js)**
+4. **Bots de diffusion (Telegram, WhatsApp, Twitter…)**
+5. **Bot Admin (pour alertes & monitoring)**
+
+---
+
+## 2. Objectifs du MVP
+
+1. **Impact maximal à moindre coût**
+
+   * Obtenir rapidement une liste d’offres à jour pour les candidats.
+   * Héberger l’ensemble pour < 7 € / mois.
+
+2. **Automatisation complète**
+
+   * Scraping 4×/jour, mise à jour en base.
+   * Bots consomment l’API “/offers?nouveaux=true” pour diffuser.
+   * Aucune intervention humaine pour la diffusion (bots indépendants).
+
+3. **Maintenance minimale**
+
+   * Scraper IA-first (Crawl4AI) s’adaptant aux petits changements de structure.
+   * API unique servant le front-end et les bots.
+   * Centralisation des filtres et règles de “nouveaux” offres dans l’API.
+
+4. **Architecture évolutive**
+
+   * Possibilité d’ajouter de nouveaux canaux (WhatsApp, Twitter, LinkedIn…) en développant un simple bot consommant l’API.
+   * Transition future vers micro-services (ScraperService, ApiService, BotService, etc.).
+   * Prévoir l’ajout éventuel d’un espace recruteur / premium (module payant).
+
+---
+
+## 3. Architecture Globale
+
+### 3.1. Schéma de principe
+
+```mermaid
+flowchart LR
+  subgraph C1 [Scraping & Base]
+    CronScheduler["cron (4×/jour)"]
+    subgraph C1A [Crawl4AI Scrapers]
+      C4AI1["Crawl4AI (Sites 1–5)"]
+      C4AI2["Crawl4AI (Sites 6–10)"]
+      C4AI3["Crawl4AI (Sites 11–15)"]
+    end
+    CronScheduler --> C4AI1
+    CronScheduler --> C4AI2
+    CronScheduler --> C4AI3
+    C4AI1 & C4AI2 & C4AI3 --> DB[(SQLite /app/app.db)]
+    C4AI1 & C4AI2 & C4AI3 -->|Alertes Erreur| BotAdmin[(Bot Admin)]
+    C4AI1 & C4AI2 & C4AI3 -->|Prompts LLM| LLM[(Gemini/Qwen via OpenRouter)]
+  end
+
+  subgraph C2 [API & Frontend]
+    DB --> API["API FastAPI (app:5000)"]
+    API --> Frontend["Mini-Site Next.js (Vercel)"]
+  end
+
+  subgraph C3 [Bots de Diffusion]
+    BotTG["Bot Telegram"]
+    BotWA["Bot WhatsApp"]
+    BotX["Bot Twitter"]
+    API -->|GET /offers?nouveaux=true| BotTG
+    API -->|GET /offers?nouveaux=true| BotWA
+    API -->|GET /offers?nouveaux=true| BotX
+  end
+
+  classDef comp fill:#f3f3f3,stroke:#333,stroke-width:1px;
+  class C1,C2,C3 comp;
+```
+
+1. **Cron Scheduler** : déclenche 4×/jour les conteneurs `Crawl4AI1`, `Crawl4AI2`, `Crawl4AI3`, chacun gérant 5 des 15 sites.
+
+2. **Crawl4AI Scrapers** :
+
+   * Exécutent un “crawl” sur les pages de type “job board”.
+   * Ne récupèrent que les **nouvelles offres** (contrôle via `url` unique ou champ `date_scraped`).
+   * Envoient les données structurées (JSON) vers la base SQLite (`app.db`).
+   * En cas d’erreur de scraping (sélecteur introuvable, page inaccessible), déclenchent un appel au **Bot Admin** pour alerter, et/ou font un prompt au **LLM** pour tenter une correction automatique.
+
+3. **Base de données (SQLite /app/app.db)** :
+
+   * Contient la table `offers` avec tous les champs nécessaires
+   * Conserve l’historique, permet le filtrage “nouveaux”
+
+4. **API (FastAPI)** :
+
+   * Expose les endpoints :
+
+     * `GET /offers` (pagination, filtres),
+     * `GET /offers?nouveaux=true` (retourne les offres insérées depuis la dernière exécution),
+     * `GET /offer/{id}` (détails),
+     * `GET /filters` (liste distincte des `location`, `contract_type`).
+   * Sert à la fois le **frontend Next.js** et les **bots de diffusion**.
+   * Implémente la logique “marque comme lu” ou “window temporelle” pour éviter les doublons dans les bots.
+
+5. **Mini-Site (Next.js sur Vercel)** :
+
+   * Affiche la liste paginée des offres, avec filtres (location, type de contrat, recherche full-text).
+   * Page détail `/offer/[id]` pour chaque offre.
+   * Esthétique minimaliste (pas de header/hero/footer volumineux), design responsive.
+   * Appelle l’API via `fetch` (ou `getServerSideProps`) pour construire les pages.
+
+6. **Bots de diffusion** :
+
+   * **Bot Telegram :**
+
+     * Se connecte toutes les heures à `GET /offers?nouveaux=true`, prend les nouvelles offres, formate un message Markdown, envoie dans un canal Telegram.
+   * **Bot WhatsApp** (via Twilio ou Baileys) :
+
+     * Même principe, envoie un message WhatsApp pour chaque nouvelle offre.
+   * **Bot Twitter** (via l’API X) :
+
+     * Publie un tweet pour chaque nouvelle offre (respect de 280 caractères ou lien raccourci).
+   * Tous ces bots ne touchent pas directement à la base, mais ne font qu’appeler l’**API** du mini-site.
+
+7. **Bot Admin (Telegram)** :
+
+   * Reçoit les alertes de scraping (via webhook ou appel direct).
+   * Pour chaque conteneur `Crawl4AI` en erreur, reçoivent un message (`“Erreur sur Site X : impossible d’extraire titre. Correction en cours…”`).
+   * Peut également envoyer un message si un conteneur ne remonte pas (via un scheduler de vérification).
+
+---
+
+## 4. Composants Techniques
+
+### 4.1. Module 1 : Scraping (Crawl4AI)
+
+#### 4.1.1. Présentation de Crawl4AI
+
+* **Projet** : Open source, \~ 44 400 ★ sur GitHub (2023+).
+* **Langage** : Python (3.10+).
+* **Fonctionnalités clés** :
+
+  * Mode “stealth” (contournement d’anti-bot de base).
+  * Intégration simplifiée de Playwright.
+  * Possibilité d’utiliser un **LLM** (via OpenRouter, HuggingFace, local) pour analyser le DOM et déterminer automatiquement les sélecteurs.
+  * Génération de JSON structuré directement, prêt à insérer en base.
+  * Support du crawling en pipeline (découverte de liens, exploration de pages, extraction).
+  * Système de “config.json” pour décrire chaque site (URL, prompts LLM, règles de pagination, sélecteurs par défaut).
+
+#### 4.1.2. Pourquoi Crawl4AI pour ce projet ?
+
+* **Adaptabilité** :
+
+  * Si un site modifie ses classes CSS, le LLM peut recevoir un prompt « Ne trouve pas .job-title, trouve le nouvel élément affichant le titre » et ajuster automatiquement le sélecteur.
+  * Cela réduit la maintenance manuelle, car seuls les changements “radicaux” (nouvelle architecture HTML complète) nécessitent une intervention humaine.
+* **Performance** :
+
+  * Consomme \~ 500 Mo RAM par conteneur (Playwright + Python).
+  * CPU 10 %–15 % au moment du crawl (pour 5 sites).
+  * Facteur décisif pour un VPS à 2 Go.
+
+#### 4.1.3. Structure du répertoire `crawlerX/`
+
+```
+crawler1/
+├─ Dockerfile
+├─ requirements.txt
+├─ run_crawl4ai.py
+└─ config.json
+```
+
+* `requirements.txt` :
+
+  ```
+  crawl4ai==3.0.0
+  playwright
+  python-dotenv
+  ```
+* `config.json` : liste des 5 sites, ex :
+
+  ```json
+  {
+    "sites": [
+      {
+        "name": "EmploiTG",
+        "url": "https://emploi.tg/offres",
+        "prompt": "Pour chaque offre sur cette page, extraits le titre, l'entreprise, la localisation, la date, le type de contrat et l'URL. Ne récupère que les offres publiées dans les dernières 6 heures."
+      },
+      {
+        "name": "Jobrapido",
+        "url": "https://www.jobrapido.com/emplois",
+        "prompt": "Sur la page principale, parcours la liste des offres d'emploi, récupère les éléments (title, company, location, url, posted_date) pour celles datant des dernières 6 heures."
+      },
+      // 3 autres blocs similaires…
+    ],
+    "llm_provider": "openrouter",
+    "llm_model": "qwen-1",
+    "llm_api_key": "<OPENROUTER_API_KEY>"
+  }
+  ```
+* `run_crawl4ai.py` : le script principal pour lancer le crawl sur les 5 sites. Voir section [5.3](#53-exemple-de-script-run_crawl4aipy).
+
+### 4.2. Module 2 : Base de Données
+
+#### 4.2.1. Choix de SQLite pour le MVP
+
+* **Avantages** :
+
+  * Fichier unique, zero configuration.
+  * Suffisant pour un volume de quelques dizaines de milliers d’offres.
+  * Accès rapide (local).
+* **Limites** :
+
+  * Moindre scalabilité si < de 100 000 enregistrements, mais on peut migrer vers PostgreSQL au besoin (Phase 2).
+  * Verrouillage possible si trop d’écritures simultanées, mais notre planner exécute séquentiellement les crawlers.
+
+#### 4.2.2. Schéma de la table `offers`
+
+```sql
+CREATE TABLE IF NOT EXISTS offers (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  url             TEXT UNIQUE NOT NULL,
+  title           TEXT NOT NULL,
+  company         TEXT,
+  location        TEXT,
+  date_posted     TEXT,   -- ex: '2025-05-28T14:00:00Z'
+  contract_type   TEXT,
+  date_scraped    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  is_new          BOOLEAN DEFAULT 1
+);
+```
+
+* `url` : clé unique (empêche les doublons).
+* `date_posted` : date/heure de publication sur le site d’origine (ou approximée).
+* `date_scraped` : timestamp UTC de l’insertion.
+* `is_new` : booléen temporaire pour indiquer qu’une offre n’a pas encore été lue par l’API / Bot.
+
+> **Logique “is\_new”** :
+>
+> * Lorsqu’un scraper insère une offre, `is_new = 1`.
+> * L’API, lors d’un `GET /offers?nouveaux=true`, récupère les enregistrements `WHERE is_new = 1` puis **met à jour** ces lignes en `is_new = 0`.
+> * Ainsi, un bot n’enverra chaque offre qu’une seule fois (pas de doublons).
+
+#### 4.2.3. Migration vers PostgreSQL (Phase 2)
+
+* **Pourquoi** :
+
+  * Besoin de plus de fiabilité sous haute charge, meilleures performances sur les requêtes concurrentes, indexations avancées.
+* **Comment** :
+
+  1. Installer PostgreSQL (service géré comme **ElephantSQL** ou **Heroku Postgres Free**).
+  2. Exporter `offers` depuis SQLite :
+
+     ```bash
+     sqlite3 app.db .dump > sqlite_dump.sql
+     ```
+  3. Modifier le script d’importation (`psql`) pour recréer la table en PostgreSQL et importer les données.
+  4. Adapter `DATABASE_URL` dans `FastAPI` pour pointer vers `postgresql://user:pass@host:port/dbname`.
+  5. Tester les requêtes via `psycopg2` ou `asyncpg` (FastAPI en mode async).
+
+---
+
+### 4.3. Module 3 : API & Mini-Site Web
+
+#### 4.3.1. API (FastAPI)
+
+##### 4.3.1.1. Présentation
+
+* **Rapide**, **léger** et **asynchrone**.
+* Génère automatiquement la documentation OpenAPI/Swagger à `/docs`.
+* Connecte directement avec SQLite ou PostgreSQL (via SQLAlchemy ou `databases`).
+
+##### 4.3.1.2. Endpoints principaux
+
+| Endpoint                    | Description                                                                                            |
+| --------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `GET /offers`               | Retourne la liste paginée des offres (params : `page`, `page_size`, `location`, `contract_type`).      |
+| `GET /offers?nouveaux=true` | Retourne uniquement les offres avec `is_new = 1`, puis met `is_new` à 0.                               |
+| `GET /offer/{id}`           | Retourne tous les champs d’une offre (titre, entreprise, location, date\_posted, contract\_type, url). |
+| `GET /filters`              | Retourne JSON :                                                                                        |
+
+```json
+{
+  "locations": ["Lomé", "Accra", "Abidjan", ...],
+  "contract_types": ["CDD", "CDI", "Stage", …]
+}
+```
+
+##### 4.3.1.3. Exemple succinct (Python | FastAPI)
+
+```python
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+import sqlite3
+from typing import List, Optional
+import datetime
+
+app = FastAPI(title="Job Aggregator API")
+
+DATABASE = "app.db"
+
+class Offer(BaseModel):
+    id: int
+    title: str
+    company: Optional[str]
+    location: Optional[str]
+    date_posted: Optional[str]
+    contract_type: Optional[str]
+    url: str
+    date_scraped: str
+
+def get_db():
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+@app.get("/offers", response_model=List[Offer])
+def list_offers(
+    page: int = 1,
+    page_size: int = 10,
+    location: Optional[str] = None,
+    contract_type: Optional[str] = None,
+    nouveaux: bool = False
+):
+    conn = get_db()
+    cursor = conn.cursor()
+
+    if nouveaux:
+        # Récupère et marque comme lues
+        cursor.execute("SELECT * FROM offers WHERE is_new = 1 ORDER BY date_scraped DESC")
+        rows = cursor.fetchall()
+        cursor.execute("UPDATE offers SET is_new = 0 WHERE is_new = 1")
+        conn.commit()
+    else:
+        query = "SELECT * FROM offers"
+        params = []
+        filters = []
+        if location:
+            filters.append("location = ?")
+            params.append(location)
+        if contract_type:
+            filters.append("contract_type = ?")
+            params.append(contract_type)
+        if filters:
+            query += " WHERE " + " AND ".join(filters)
+        query += " ORDER BY date_scraped DESC LIMIT ? OFFSET ?"
+        params.extend([page_size, (page-1)*page_size])
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+
+    conn.close()
+    return [Offer(**dict(row)) for row in rows]
+
+@app.get("/offer/{offer_id}", response_model=Offer)
+def get_offer(offer_id: int):
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM offers WHERE id = ?", (offer_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="Offer not found")
+    return Offer(**dict(row))
+
+@app.get("/filters")
+def get_filters():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT location FROM offers")
+    locations = [r[0] for r in cursor.fetchall() if r[0]]
+    cursor.execute("SELECT DISTINCT contract_type FROM offers")
+    contract_types = [r[0] for r in cursor.fetchall() if r[0]]
+    conn.close()
+    return {"locations": sorted(locations), "contract_types": sorted(contract_types)}
+```
+
+###### Points clés :
+
+* `nouveaux=true` gère automatiquement la mise à jour de `is_new`.
+* On ferme la connexion à chaque requête pour libérer le fichier SQLite.
+* Pour PostgreSQL, remplacer `sqlite3` par `asyncpg` ou `psycopg2` + SQLAlchemy.
+
+---
+
+#### 4.3.2. Mini-Site Web (Next.js)
+
+##### 4.3.2.1. Présentation
+
+* **Stack** : Next.js (React + Server Side Rendering ou Static Generation) avec **Tailwind CSS** pour le style.
+* **Hébergement** : Vercel (plan gratuit).
+* **Fonctionnalités** :
+
+  1. **Page d’accueil `/`** :
+
+     * Appel à l’API (`GET /offers?page=1&page_size=10`) pour charger la première page d’offres.
+     * Affiche les offres sous forme de **carte** (JobCard).
+     * Sidebar (Desktop) ou Drawer (Mobile) pour filtres (location, contract\_type).
+     * Barre de recherche entrée libre (full-text sur `title`).
+  2. **Pagination** : “Précédent” / “Suivant”, 10 offres par page.
+  3. **Page détail `/offer/[id]`** :
+
+     * Appel à `GET /offer/{id}` et affiche titre, entreprise, localisation, date\_posted, contract\_type, lien “Postuler” vers l’URL externe.
+  4. **Filtres dynamiques** :
+
+     * Exemples de composants :
+
+       * **Liste déroulante (Dropdown)** pour `location`.
+       * **Checkbox Group** pour `contract_type`.
+       * **Champ de recherche** qui filtre en temps réel en appelant `GET /offers` avec query param `search=texte`.
+  5. **Design** :
+
+     * Cartes blanches (`bg-white`) avec ombres légères (`shadow-sm`), coins arrondis (`rounded-lg`).
+     * Boutons stylés (`bg-blue-600 hover:bg-blue-700 text-white rounded-md`) pour la pagination et “Postuler”.
+     * Responsive mobile-first (grille simple, Drawer pour filtres).
+
+##### 4.3.2.2. Structure des fichiers (exemple)
+
+```
+frontend/
+├─ components/
+│  ├─ JobCard.jsx
+│  ├─ FilterSidebar.jsx
+│  └─ Pagination.jsx
+├─ pages/
+│  ├─ index.jsx
+│  └─ offer/
+│     └─ [id].jsx
+├─ styles/
+│  └─ globals.css
+├─ tailwind.config.js
+├─ next.config.js
+├─ package.json
+└─ README.md
+```
+
+###### Exemple de composant `JobCard.jsx`
+
+```jsx
+import React from 'react';
+
+export default function JobCard({ offer }) {
+  return (
+    <div className="bg-white shadow-sm rounded-lg p-4 flex flex-col md:flex-row justify-between items-start">
+      <div>
+        <h2 className="text-lg font-semibold">{offer.title}</h2>
+        <p className="text-sm text-gray-600">{offer.company} – {offer.location}</p>
+        <p className="text-xs text-gray-500 mt-1">Publié : {new Date(offer.date_posted).toLocaleString()}</p>
+      </div>
+      <a
+        href={offer.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-4 md:mt-0 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md"
+      >
+        Voir détails
+      </a>
+    </div>
+  );
+}
+```
+
+###### Exemple de page principale `index.jsx`
+
+```jsx
+import React, { useState, useEffect } from 'react';
+import JobCard from '../components/JobCard';
+import FilterSidebar from '../components/FilterSidebar';
+import Pagination from '../components/Pagination';
+
+export default function Home() {
+  const [offers, setOffers] = useState([]);
+  const [filters, setFilters] = useState({ locations: [], contract_types: [] });
+  const [selectedLocation, setSelectedLocation] = useState('');
+  const [selectedContract, setSelectedContract] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+
+  useEffect(() => {
+    fetchFilters();
+  }, []);
+
+  useEffect(() => {
+    fetchOffers();
+  }, [page, selectedLocation, selectedContract, searchTerm]);
+
+  const fetchFilters = async () => {
+    const res = await fetch('https://api.monsite.com/filters');
+    const data = await res.json();
+    setFilters(data);
+  };
+
+  const fetchOffers = async () => {
+    const params = new URLSearchParams({
+      page,
+      page_size: pageSize,
+      ...(selectedLocation && { location: selectedLocation }),
+      ...(selectedContract && { contract_type: selectedContract }),
+      ...(searchTerm && { search: searchTerm }),
+    });
+    const res = await fetch(`https://api.monsite.com/offers?${params}`);
+    const data = await res.json();
+    setOffers(data);
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex">
+      <div className="hidden md:block w-1/4 p-4">
+        <FilterSidebar
+          filters={filters}
+          selectedLocation={selectedLocation}
+          setSelectedLocation={setSelectedLocation}
+          selectedContract={selectedContract}
+          setSelectedContract={setSelectedContract}
+        />
+      </div>
+      <div className="flex-1 p-4">
+        <div className="mb-4 flex items-center">
+          <input
+            type="text"
+            placeholder="Rechercher des mots-clés..."
+            className="flex-1 border border-gray-300 rounded-md px-3 py-2"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <div className="space-y-4">
+          {offers.map((offer) => (
+            <JobCard key={offer.id} offer={offer} />
+          ))}
+        </div>
+        <Pagination currentPage={page} setPage={setPage} />
+      </div>
+    </div>
+  );
+}
+```
+
+---
+
+### 4.4. Module 4 : Bots de Diffusion
+
+#### 4.4.1. Bot Telegram “Offres”
+
+##### 4.4.1.1. Présentation
+
+* **Librairie** : `python-telegram-bot` (version 20+).
+* **Rôle** : appeler périodiquement `GET /offers?nouveaux=true`, formater un message Markdown pour chaque offre, et l’envoyer dans un canal ou groupe Telegram pré-configuré.
+
+##### 4.4.1.2. Exemple de code (`bot_offres.py`)
+
+```python
+import os
+import requests
+import logging
+from telegram import Bot
+from telegram.error import TelegramError
+from apscheduler.schedulers.blocking import BlockingScheduler
+
+# Configuration
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+API_URL = os.getenv("API_URL", "http://api_service:8000")
+CHAT_ID = os.getenv("TG_CHANNEL_ID")  # ID du canal/groupe Telegram
+
+# Initialisation
+bot = Bot(token=TOKEN)
+scheduler = BlockingScheduler()
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def fetch_and_send_new_offers():
+    try:
+        res = requests.get(f"{API_URL}/offers?nouveaux=true")
+        res.raise_for_status()
+        data = res.json()
+        offers = data if isinstance(data, list) else data.get("offers", [])
+        for off in offers:
+            titre = off.get("title", "N/A")
+            entreprise = off.get("company", "N/A")
+            location = off.get("location", "N/A")
+            url = off.get("url", "#")
+            date_posted = off.get("date_posted", "")
+            text = (
+                f"📌 *{titre}*  \n"
+                f"🏢 {entreprise}  \n"
+                f"📍 {location}  \n"
+                f"⏰ Publiée : {date_posted}  \n"
+                f"🔗 [Voir l'offre]({url})"
+            )
+            bot.send_message(chat_id=CHAT_ID, text=text, parse_mode="Markdown")
+            logger.info(f"Offre envoyée : {titre} ({entreprise})")
+    except TelegramError as te:
+        logger.error(f"Erreur envoi telgram : {te}")
+    except Exception as e:
+        logger.error(f"Erreur fetch/send offers : {e}")
+
+# Envoi au démarrage
+fetch_and_send_new_offers()
+
+# Planification toutes les heures
+scheduler.add_job(fetch_and_send_new_offers, 'interval', hours=1)
+scheduler.start()
+```
+
+###### Points clés :
+
+* `apscheduler` gère une planification en boucle infinie.
+* Le script s’exécute en tant que container Docker démarré, sans intervention manuelle.
+* `CHAT_ID` peut être l’identifiant d’un canal Telegram (p. ex. `@mon_canal`).
+
+---
+
+#### 4.4.2. Bot WhatsApp (via Twilio)
+
+##### 4.4.2.1. Présentation
+
+* **Librairie** : `twilio` Python (bibliothèque officielle).
+* **Rôle** : appeler `GET /offers?nouveaux=true`, formater un message texte et l’envoyer via l’API Twilio WhatsApp.
+
+##### 4.4.2.2. Exemple de code (`bot_whatsapp.py`)
+
+```python
+import os
+import requests
+from twilio.rest import Client
+import logging
+from apscheduler.schedulers.blocking import BlockingScheduler
+
+# Configuration Twilio
+ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
+AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
+WHATSAPP_FROM = "whatsapp:+14155238886"
+WHATSAPP_TO   = "whatsapp:+<TON_NUMERO>"
+
+API_URL = os.getenv("API_URL", "http://api_service:8000")
+
+client = Client(ACCOUNT_SID, AUTH_TOKEN)
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def fetch_and_send_whatsapp_offers():
+    try:
+        res = requests.get(f"{API_URL}/offers?nouveaux=true")
+        res.raise_for_status()
+        offers = res.json().get("offers", [])
+        for off in offers:
+            text = (
+                f"{off.get('title', 'N/A')} – {off.get('company', 'N/A')} ({off.get('location', 'N/A')})\n"
+                f"Publié : {off.get('date_posted', '')}\n"
+                f"Lien : {off.get('url', '')}"
+            )
+            message = client.messages.create(
+                body=text,
+                from_=WHATSAPP_FROM,
+                to=WHATSAPP_TO
+            )
+            logger.info(f"WhatsApp envoyé : {message.sid}")
+    except Exception as e:
+        logger.error(f"Erreur bot WhatsApp : {e}")
+
+# Envoi initial
+fetch_and_send_whatsapp_offers()
+
+# Planification toutes les heures
+scheduler = BlockingScheduler()
+scheduler.add_job(fetch_and_send_whatsapp_offers, 'interval', hours=1)
+scheduler.start()
+```
+
+###### Remarques :
+
+* Tu dois paramétrer un compte **Twilio** (SID + Token) et lier ton numéro WhatsApp.
+* La limite gratuite Twilio permet quelques dizaines de messages / jour ; surveille la console Twilio pour ajuster si besoin.
+
+---
+
+#### 4.4.3. Bot Twitter / X (optionnel)
+
+##### 4.4.3.1. Présentation
+
+* **Librairie** : `tweepy` (Python) ou `twitter-api-v2` (Node.js).
+* **Rôle** : publier automatiquement un tweet pour chaque nouvelle offre.
+* **Limite** : maximal 300 Tweets / 3 h (compte standard).
+
+##### 4.4.3.2. Exemple de code (Tweepy)
+
+```python
+import os
+import requests
+import logging
+import tweepy
+from apscheduler.schedulers.blocking import BlockingScheduler
+
+# Config API X
+API_KEY = os.getenv("TWITTER_API_KEY")
+API_SECRET = os.getenv("TWITTER_API_SECRET")
+ACCESS_TOKEN = os.getenv("TWITTER_ACCESS_TOKEN")
+ACCESS_SECRET = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
+
+auth = tweepy.OAuth1UserHandler(API_KEY, API_SECRET, ACCESS_TOKEN, ACCESS_SECRET)
+twitter_api = tweepy.API(auth)
+
+API_URL = os.getenv("API_URL", "http://api_service:8000")
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def fetch_and_tweet_offers():
+    try:
+        res = requests.get(f"{API_URL}/offers?nouveaux=true")
+        res.raise_for_status()
+        offers = res.json().get("offers", [])
+        for off in offers:
+            title = off.get("title", "")
+            company = off.get("company", "")
+            url = off.get("url", "")
+            tweet = f"🔍 {title} – {company}\nLien : {url}"
+            twitter_api.update_status(tweet)
+            logger.info(f"Tweeté : {title}")
+    except Exception as e:
+        logger.error(f"Erreur bot Twitter : {e}")
+
+# Envoi initial
+fetch_and_tweet_offers()
+
+# Planification toutes les heures
+scheduler = BlockingScheduler()
+scheduler.add_job(fetch_and_tweet_offers, 'interval', hours=1)
+scheduler.start()
+```
+
+> **Attention** :
+>
+> * Respecter la limite de 280 caractères.
+> * Gérer l’échappement d’URL (utiliser `t.co` automatiquement).
+> * Surveiller la politique d’API X (limites JSON, etc.).
+
+---
+
+### 4.5. Module 5 : Bot Admin (Alertes & Monitoring)
+
+#### 4.5.1. Rôle et cas d’usage
+
+* **Recevoir les alertes de crawl** : si un conteneur Crawl4AI échoue (erreur d’extraction, page inaccessible), il envoie un message au Bot Admin (via un endpoint dédié ou en appel direct).
+* **Informer automatiquement l’administrateur** (toi) qu’une action de maintenance est nécessaire.
+* **Optionnel** : surveiller la fréquence de restart des conteneurs, surveiller le “health” global.
+
+#### 4.5.2. Exemple de code (Bot Admin – `bot_admin.py`)
+
+```python
+import os
+import logging
+from telegram import Bot
+from telegram.error import TelegramError
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
+
+ADMIN_TOKEN = os.getenv("ADMIN_TELEGRAM_TOKEN")
+ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID")
+bot = Bot(token=ADMIN_TOKEN)
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+@app.route("/alert", methods=["POST"])
+def alert():
+    data = request.json
+    site = data.get("site", "Inconnu")
+    error = data.get("error", "Erreur non spécifiée")
+    message = f"⚠️ *Alerte Scraping* \nSite : {site}\nErreur : {error}"
+    try:
+        bot.send_message(chat_id=ADMIN_CHAT_ID, text=message, parse_mode="Markdown")
+        return jsonify({"status": "ok"}), 200
+    except TelegramError as te:
+        logger.error(f"Erreur envoi Admin Bot : {te}")
+        return jsonify({"status": "failed", "error": str(te)}), 500
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5001)
+```
+
+###### Remarques :
+
+* Chaque conteneur Crawl4AI, lorsqu’il rencontre une erreur, fait :
+
+  ```python
+  import requests
+  requests.post("http://bot_admin:5001/alert", json={"site": "NomDuSite", "error": "CSS introuvable"})
+  ```
+* **Bot Admin** est un micro-service Flask (port 5001). Il pourrait être intégré à l’API FastAPI, mais on le sépare pour alléger l’API principale.
+* `ADMIN_CHAT_ID` est l’identifiant du canal ou du chat Telegram où tu souhaites être alerté.
+
+---
+
+## 5. Exemples de Configuration
+
+### 5.1. Docker Compose : `docker-compose.yml` (racine)
+
+```yaml
+version: '3.8'
+services:
+  crawler1:
+    build: ./crawler1
+    container_name: crawler1
+    restart: on-failure
+    environment:
+      - LLM_API_KEY=${LLM_API_KEY}       # Clé OpenRouter / Qwen / Gemini
+      - DB_PATH=/app/app.db
+      - BOT_ADMIN_URL=http://bot_admin:5001/alert
+    volumes:
+      - ./api/app.db:/app/app.db
+
+  crawler2:
+    build: ./crawler2
+    container_name: crawler2
+    restart: on-failure
+    environment:
+      - LLM_API_KEY=${LLM_API_KEY}
+      - DB_PATH=/app/app.db
+      - BOT_ADMIN_URL=http://bot_admin:5001/alert
+    volumes:
+      - ./api/app.db:/app/app.db
+
+  crawler3:
+    build: ./crawler3
+    container_name: crawler3
+    restart: on-failure
+    environment:
+      - LLM_API_KEY=${LLM_API_KEY}
+      - DB_PATH=/app/app.db
+      - BOT_ADMIN_URL=http://bot_admin:5001/alert
+    volumes:
+      - ./api/app.db:/app/app.db
+
+  api:
+    build: ./api
+    container_name: api_service
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./api/app.db:/app/app.db
+
+  bot_offres:
+    build: ./bot_offres
+    container_name: bot_offres
+    restart: always
+    depends_on:
+      - api
+    environment:
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - API_URL=http://api_service:8000
+      - TG_CHANNEL_ID=${TG_CHANNEL_ID}
+
+  bot_whatsapp:
+    build: ./bot_whatsapp
+    container_name: bot_whatsapp
+    restart: always
+    depends_on:
+      - api
+    environment:
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
+      - API_URL=http://api_service:8000
+      - WHATSAPP_TO=${WHATSAPP_TO}
+
+  bot_twitter:
+    build: ./bot_twitter
+    container_name: bot_twitter
+    restart: always
+    depends_on:
+      - api
+    environment:
+      - TWITTER_API_KEY=${TWITTER_API_KEY}
+      - TWITTER_API_SECRET=${TWITTER_API_SECRET}
+      - TWITTER_ACCESS_TOKEN=${TWITTER_ACCESS_TOKEN}
+      - TWITTER_ACCESS_SECRET=${TWITTER_ACCESS_SECRET}
+      - API_URL=http://api_service:8000
+
+  bot_admin:
+    build: ./bot_admin
+    container_name: bot_admin
+    restart: always
+    ports:
+      - "5001:5001"
+    environment:
+      - ADMIN_TELEGRAM_TOKEN=${ADMIN_TELEGRAM_TOKEN}
+      - ADMIN_CHAT_ID=${ADMIN_CHAT_ID}
+
+networks:
+  default:
+    driver: bridge
+```
+
+> **Explications** :
+>
+> * **Volumes** : partagent le même fichier `app.db` entre scrapers et API.
+> * **Bots** : chacun a ses variables d’environnement propres (tokens).
+> * **Bot Admin** : expose son port `5001` afin que les scrapers puissent y poster un JSON.
+> * **LLM\_API\_KEY** est la même pour les 3 conteneurs Crawl4AI (tu peux varier si tu utilises différents modèles).
+
+---
+
+### 5.2. Exemple de `Dockerfile` pour Crawl4AI
+
+```dockerfile
+# Fichier : crawler1/Dockerfile
+FROM python:3.10-slim
+
+# Variables d'environnement pour réduire la taille
+ENV PIP_NO_CACHE_DIR=1 \
+    PYTHONUNBUFFERED=1
+
+# Installation des dépendances système pour Playwright
+RUN apt-get update && \
+    apt-get install -y wget gnupg ca-certificates libnss3 libatk1.0-0 libatk-bridge2.0-0 \
+    libc6 libcairo2 libcups2 libdbus-1-3 libexpat1 libfontconfig1 libgbm1 libgcc1 libglib2.0-0 \
+    libgtk-3-0 libnspr4 libpango-1.0-0 libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxcursor1 \
+    libxdamage1 libxext6 libxfixes3 libxi6 libxrandr2 libxrender1 libxtst6 lsb-release \
+    libasound2 libpangocairo-1.0-0 libnss3 libpq-dev curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Installer Playwright
+RUN pip install playwright==1.34.1
+RUN playwright install --with-deps
+
+# Installer Crawl4AI
+RUN pip install crawl4ai==3.0.0
+
+# Créer le répertoire d'app
+WORKDIR /app
+
+# Copier la configuration du scraper
+COPY config.json /app/config.json
+COPY run_crawl4ai.py /app/run_crawl4ai.py
+
+# Créer un volume pour la base de données (monté par docker-compose)
+VOLUME ["/app/app.db"]
+
+# Point d'entrée
+CMD ["python", "run_crawl4ai.py", "--config", "config.json"]
+```
+
+> **Explications** :
+>
+> * On utilise l’image `python:3.10-slim` pour un conteneur plus léger.
+> * On installe les dépendances système nécessaires à Playwright.
+> * On installe `crawl4ai` et ses dépendances.
+> * Le script `run_crawl4ai.py` sera exécuté automatiquement au démarrage du conteneur.
+> * Le volume `/app/app.db` sera monté depuis le dossier `api/` (shared).
+
+---
+
+### 5.3. Exemple de Script Python pour Crawl4AI (`run_crawl4ai.py`)
+
+```python
+import os
+import json
+import sqlite3
+import logging
+from crawl4ai import Crawler
+from crawl4ai.config import CrawlerConfig
+import time
+import requests
+
+# Configuration Logger
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("Crawl4AI")
+
+# Variables d'environnement
+DB_PATH = os.getenv("DB_PATH", "/app/app.db")
+BOT_ADMIN_URL = os.getenv("BOT_ADMIN_URL")  # ex: http://bot_admin:5001/alert
+
+# Charger configuration JSON
+with open("config.json", "r") as f:
+    config_data = json.load(f)
+
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS offers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            url TEXT UNIQUE NOT NULL,
+            title TEXT NOT NULL,
+            company TEXT,
+            location TEXT,
+            date_posted TEXT,
+            contract_type TEXT,
+            date_scraped TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            is_new BOOLEAN DEFAULT 1
+        );
+    """)
+    conn.commit()
+    conn.close()
+
+def insert_offers(records):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    for rec in records:
+        try:
+            cursor.execute("""
+                INSERT OR IGNORE INTO offers (url, title, company, location, date_posted, contract_type, is_new)
+                VALUES (?, ?, ?, ?, ?, ?, 1)
+            """, (
+                rec.get("url", ""),
+                rec.get("title", ""),
+                rec.get("company", ""),
+                rec.get("location", ""),
+                rec.get("date_posted", ""),
+                rec.get("contract_type", "")
+            ))
+        except Exception as e:
+            logger.error(f"Erreur insertion DB : {e} - {rec}")
+    conn.commit()
+    conn.close()
+
+def alert_admin(site_name, error_msg):
+    try:
+        payload = {"site": site_name, "error": error_msg}
+        requests.post(BOT_ADMIN_URL, json=payload, timeout=5)
+        logger.info(f"Alerte envoyée : {site_name} -> {error_msg}")
+    except Exception as e:
+        logger.error(f"Impossible d'alerter admin : {e}")
+
+def run_crawler_for_site(site_cfg):
+    try:
+        site_name = site_cfg["name"]
+        url = site_cfg["url"]
+        prompt = site_cfg["prompt"]
+
+        # Initialisation config Crawl4AI
+        cfg = CrawlerConfig(
+            url=url,
+            prompt=prompt,
+            llm_provider=config_data.get("llm_provider"),
+            llm_model=config_data.get("llm_model"),
+            llm_api_key=os.getenv("LLM_API_KEY")
+        )
+        crawler = Crawler(cfg)
+
+        # Exécution du crawl
+        logger.info(f"Début crawl site : {site_name} ({url})")
+        records = crawler.arun()  # récuperation liste dicts
+        logger.info(f"{len(records)} offres récupérées pour {site_name}")
+
+        # Insertion en base
+        insert_offers(records)
+    except Exception as e:
+        err_msg = str(e)
+        logger.error(f"Erreur sur site {site_cfg['name']} : {err_msg}")
+        alert_admin(site_cfg["name"], err_msg)
+
+def main():
+    init_db()
+    sites = config_data.get("sites", [])
+    for site_cfg in sites:
+        run_crawler_for_site(site_cfg)
+        # Pause entre chaque site pour limiter la charge
+        time.sleep(10)
+
+if __name__ == "__main__":
+    main()
+```
+
+> **Explications** :
+>
+> * `CrawlerConfig` : objet de configuration pour Crawl4AI (URL, prompt, LLM).
+> * Méthode `crawler.arun()` : renvoie une liste de dictionnaires, chaque dict ayant les clés `url`, `title`, `company`, `location`, `date_posted`, `contract_type`.
+> * On appelle `init_db()` pour s’assurer que la table `offers` existe.
+> * Pour chaque site, on exécute un crawl, on récupère les offres et on insère en base (via `INSERT OR IGNORE` pour gérer le delta).
+> * En cas d’erreur (CSS introuvable, code HTTP 404, etc.), on appelle `alert_admin()`, qui poste un JSON à `BOT_ADMIN_URL`.
+
+---
+
+### 5.4. Exemple de Dockerfile pour l’API FastAPI
+
+```
+# Fichier : api/Dockerfile
+FROM tiangolo/uvicorn-gunicorn-fastapi:python3.10
+
+# Créer le répertoire de l'application
+WORKDIR /app
+
+# Copier requirements et installer
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
+# Copier l'application
+COPY main.py /app/main.py
+
+# Créer un volume pour la base de données
+VOLUME ["/app/app.db"]
+
+# Expose port (défini dans l'image de base)
+# CMD déjà défini dans l'image de base (uvicorn main:app)
+
+```
+
+* `requirements.txt` :
+
+  ```
+  fastapi
+  uvicorn[standard]
+  pydantic
+  sqlite3  # pour SQLite (déjà intégré dans Python)
+  databases  # si PostgreSQL plus tard
+  ```
+
+---
+
+### 5.5. Exemple de Dockerfile pour le Bot Telegram “Offres”
+
+```
+# Fichier : bot_offres/Dockerfile
+FROM python:3.10-slim
+
+ENV PIP_NO_CACHE_DIR=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY bot_offres.py /app/bot_offres.py
+
+CMD ["python", "bot_offres.py"]
+```
+
+* `requirements.txt` :
+
+  ```
+  python-telegram-bot==20.3
+  apscheduler
+  requests
+  ```
+* `bot_offres.py` : voir section [4.4.1.2](#441-exemple-de-code-bot-telegrams-offres).
+
+---
+
+### 5.6. Exemple de Dockerfile pour le Bot WhatsApp (Twilio)
+
+```
+# Fichier : bot_whatsapp/Dockerfile
+FROM python:3.10-slim
+
+ENV PIP_NO_CACHE_DIR=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY bot_whatsapp.py /app/bot_whatsapp.py
+
+CMD ["python", "bot_whatsapp.py"]
+```
+
+* `requirements.txt` :
+
+  ```
+  twilio
+  apscheduler
+  requests
+  ```
+
+---
+
+### 5.7. Exemple de Dockerfile pour le Bot Admin
+
+```
+# Fichier : bot_admin/Dockerfile
+FROM python:3.10-slim
+
+ENV PIP_NO_CACHE_DIR=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY bot_admin.py /app/bot_admin.py
+
+CMD ["python", "bot_admin.py"]
+```
+
+* `requirements.txt` :
+
+  ```
+  flask
+  python-telegram-bot==20.3
+  requests
+  ```
+
+---
+
+## 6. Plan de Déploiement & Mise en Œuvre
+
+### 6.1. Préparation du VPS (VLE-2)
+
+1. **Accès SSH** :
+
+   ```bash
+   ssh root@<IP_VPS>
+   ```
+2. **Mettre à jour le système** :
+
+   ```bash
+   apt update && apt upgrade -y
+   ```
+3. **Installer les packages de base** :
+
+   ```bash
+   apt install -y git curl wget build-essential apt-transport-https ca-certificates gnupg lsb-release
+   ```
+
+### 6.2. Installation de Docker & Docker Compose
+
+1. **Installer Docker** :
+
+   ```bash
+   curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+   add-apt-repository \
+     "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
+     $(lsb_release -cs) \
+     stable"
+   apt update
+   apt install -y docker-ce docker-ce-cli containerd.io
+   ```
+2. **Ajouter ton utilisateur au groupe Docker** (optionnel, si tu n’es pas root) :
+
+   ```bash
+   usermod -aG docker <TON_UTILISATEUR>
+   ```
+3. **Installer Docker Compose** :
+
+   ```bash
+   DOCKER_COMPOSE_VERSION="1.29.2"
+   curl -L "https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+   chmod +x /usr/local/bin/docker-compose
+   ```
+4. **Vérifier l’installation** :
+
+   ```bash
+   docker --version
+   docker-compose --version
+   ```
+
+### 6.3. Structure des Répertoires sur le VPS
+
+Sur ton VPS, choisis un dossier de travail, par exemple `/home/<user>/job-aggregator/`.
+
+```bash
+mkdir -p /home/<user>/job-aggregator
+cd /home/<user>/job-aggregator
+```
+
+Clone (ou crée) les répertoires suivants :
+
+```
+job-aggregator/
+├─ crawler1/
+│  ├─ Dockerfile
+│  ├─ requirements.txt
+│  ├─ config.json
+│  └─ run_crawl4ai.py
+├─ crawler2/
+│  └─ ... (mêmes fichiers, config.json adapté aux sites 6-10)
+├─ crawler3/
+│  └─ ... (mêmes fichiers, config.json adapté aux sites 11-15)
+├─ api/
+│  ├─ Dockerfile
+│  ├─ requirements.txt
+│  └─ main.py
+├─ bot_offres/
+│  ├─ Dockerfile
+│  ├─ requirements.txt
+│  └─ bot_offres.py
+├─ bot_whatsapp/
+│  ├─ Dockerfile
+│  ├─ requirements.txt
+│  └─ bot_whatsapp.py
+├─ bot_twitter/
+│  ├─ Dockerfile
+│  ├─ requirements.txt
+│  └─ bot_twitter.py
+├─ bot_admin/
+│  ├─ Dockerfile
+│  ├─ requirements.txt
+│  └─ bot_admin.py
+└─ docker-compose.yml
+```
+
+### 6.4. Configuration du Cron
+
+1. **Éditer le crontab** :
+
+   ```bash
+   crontab -e
+   ```
+2. **Ajouter la ligne suivante** pour redémarrer les conteneurs `crawler1`, `crawler2`, `crawler3` 4×/jour :
+
+   ```
+   0 0,6,12,18 * * * docker restart crawler1 crawler2 crawler3
+   ```
+
+   > Ce cron exécute `docker restart` à 00h, 06h, 12h, 18h pour redémarrer les crawlers.
+   > Au redémarrage, chaque `run_crawl4ai.py` s’exécute automatiquement, scrappe ses sites et poste les données en DB.
+
+### 6.5. Déploiement Frontend sur Vercel
+
+1. **Créer un compte Vercel** (gratuit).
+2. **Cloner** ou **pousser** le répertoire `frontend/` sur un repository GitHub (ou GitLab).
+3. **Connecter** ce repo à Vercel (import project).
+4. **Définir** la variable d’environnement `NEXT_PUBLIC_API_URL = https://<IP_VPS>:8000` (ou utiliser un nom de domaine).
+5. **Déployer** : Vercel construira automatiquement le projet Next.js et le servira.
+
+   * Résultat : `https://<ton-projet>.vercel.app` montre la page d’accueil.
+
+> **Note** : si ton VPS n’a pas de nom de domaine, tu peux exposer l’API via une IP publique (ex: `http://123.45.67.89:8000`). Pour la production, il est recommandé de mettre un reverse-proxy (NGINX) et un nom de domaine, mais ce n’est pas indispensable pour le MVP.
+
+---
+
+## 7. Gestion du Stockage & Base de Données
+
+### 7.1. Schéma de la Base `offers`
+
+```sql
+CREATE TABLE IF NOT EXISTS offers (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  url             TEXT UNIQUE NOT NULL,
+  title           TEXT NOT NULL,
+  company         TEXT,
+  location        TEXT,
+  date_posted     TEXT,
+  contract_type   TEXT,
+  date_scraped    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  is_new          BOOLEAN DEFAULT 1
+);
+```
+
+* **Champs clés** :
+
+  * `url` : identifiant unique (empêche doublons).
+  * `date_posted` : date d’origine si connue.
+  * `date_scraped` : timestamp UTC d’insertion.
+  * `is_new` : booléen pour gérer la logique “offres non encore envoyées” aux bots.
+
+### 7.2. Migration SQLite → PostgreSQL (Phase 2)
+
+1. Exporter les données SQLite :
+
+   ```bash
+   sqlite3 app.db .dump > sqlite_dump.sql
+   ```
+2. Sur PostgreSQL (ElephantSQL ou Heroku) :
+
+   ```sql
+   -- Exemple psql
+   CREATE TABLE offers (
+     id SERIAL PRIMARY KEY,
+     url TEXT UNIQUE NOT NULL,
+     title TEXT NOT NULL,
+     company TEXT,
+     location TEXT,
+     date_posted TIMESTAMP,
+     contract_type TEXT,
+     date_scraped TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     is_new BOOLEAN DEFAULT TRUE
+   );
+
+   \i sqlite_dump.sql
+   ```
+3. Adapter la connexion dans `FastAPI` :
+
+   ```python
+   import databases, sqlalchemy
+
+   DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:pass@host:5432/dbname")
+   database = databases.Database(DATABASE_URL)
+   metadata = sqlalchemy.MetaData()
+   # Définir la table offers via SQLAlchemy...
+   ```
+4. Mettre à jour `docker-compose.yml` pour pointer vers un conteneur PostgreSQL (ou une URL managée).
+5. Tester les requêtes `/offers` sur PostgreSQL avant de retirer SQLite.
+
+---
+
+## 8. Surveillance, Logs & Alerte
+
+### 8.1. Logs Docker & Heap
+
+* **Logs des conteneurs** :
+
+  ```bash
+  docker logs crawler1 --follow
+  docker logs api_service --follow
+  docker logs bot_offres --follow
+  ```
+* **Surveillance mémoire & CPU** :
+
+  ```bash
+  docker stats
+  htop
+  ```
+* **Rotation des logs** :
+
+  * Sur chaque conteneur, on peut configurer un **log-driver** (ex : `json-file` avec `max-size: "10m"` et `max-file: "3"`) dans `docker-compose.yml` :
+
+    ```yaml
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    ```
+
+### 8.2. Bot Admin : Mécanisme d’Alerte
+
+* **Endpoints** :
+
+  * `http://bot_admin:5001/alert` reçoit un JSON `{ "site": "NomDuSite", "error": "Description de l'erreur" }`.
+* **Fonctionnement** :
+
+  * **Crawl4AI** : dans le bloc `except` du crawl, appeler `alert_admin(site_name, error_msg)` qui POSTe au Bot Admin.
+  * **Bot Admin** (Flask) reçoit, formate un message **Markdown** et envoie sur le chat admin Telegram (ID dans `ADMIN_CHAT_ID`).
+  * Optionnel : on peut stocker ces alertes dans une table `alerts` dans la base pour historique.
+
+#### Exemple du handler d’erreur dans `run_crawl4ai.py`
+
+```python
+except Exception as e:
+    err_msg = str(e)
+    logger.error(f"Erreur sur site {site_cfg['name']} : {err_msg}")
+    try:
+        requests.post(
+            os.getenv("BOT_ADMIN_URL"),
+            json={"site": site_cfg["name"], "error": err_msg},
+            timeout=5
+        )
+    except Exception as ex:
+        logger.error(f"Impossible d’envoyer l’alerte : {ex}")
+```
+
+---
+
+### 8.3. Healthchecks & Redémarrage Automatique
+
+* **Configurer `restart: on-failure`** dans `docker-compose.yml` pour les crawlers et bots critiques :
+
+  ```yaml
+  crawler1:
+    restart: on-failure
+    ...
+  api:
+    restart: always
+    ...
+  ```
+* **Healthcheck** (Docker Compose v3.9+) :
+
+  ```yaml
+  api:
+    build: ./api
+    container_name: api_service
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+  ```
+
+  * L’API FastAPI doit exposer un endpoint `/health` renvoyant `{"status": "ok"}`.
+* Si un conteneur échoue 3 fois de suite, Docker ne tente plus de le redémarrer, déclenchant une alerte du Bot Admin.
+
+---
+
+## 9. Estimation des Ressources & Coûts
+
+### 9.1. Usage Mémoire et CPU
+
+| Composant                   | RAM estimée | CPU estimé (peak)     | Notes                                                               |
+| --------------------------- | ----------- | --------------------- | ------------------------------------------------------------------- |
+| **Crawl4AI (1 conteneur)**  | \~ 500 Mo   | \~ 10 % – 15 %        | Crawl de 5 sites (mode headless + LLM).                             |
+| **Crawl4AI (3 conteneurs)** | \~ 1,5 Go   | \~ 30 % – 45 % (peak) | Peut être exécuté en **séquentiel** pour une empreinte plus faible. |
+| **API FastAPI**             | \~ 200 Mo   | \~ 5 % – 10 %         | Idle / requêtes légères.                                            |
+| **Bot Telegram (offres)**   | \~ 100 Mo   | \~ 5 % – 10 %         | Idle, exécution d’appels HTTP toutes les heures.                    |
+| **Bot WhatsApp (Twilio)**   | \~ 100 Mo   | \~ 5 % – 10 %         | Idle, exécution d’appels HTTP toutes les heures.                    |
+| **Bot Twitter (X)**         | \~ 100 Mo   | \~ 5 % – 10 %         | Idle, exécution d’appels HTTP toutes les heures.                    |
+| **Bot Admin (Flask)**       | \~ 50 Mo    | \~ 2 % – 5 %          | Idle, n’envoie qu’en cas d’erreur.                                  |
+| **OS + Docker Engine**      | \~ 200 Mo   | \~ 5 % – 10 %         | Ubuntu minimal + Docker.                                            |
+| **Total approximé**         | \~ 2,05 Go  | \~ 70 % – 90 % (peak) | Reste < 200 Mo pour swap et pics.                                   |
+
+> **Remarques** :
+>
+> * Pour limiter l’usage mémoire, on peut lancer **deux crawlers en cascade** plutôt que 3 en parallèle.
+> * On peut regrouper certains bots (ex. Telegram “offres” + Admin) dans un même conteneur pour économiser 50 Mo.
+> * Surveiller régulièrement avec `docker stats`, `htop`, et ajuster si nécessaire.
+
+---
+
+### 9.2. Bande Passante & Stockage
+
+* **Stockage** :
+
+  * 40 Go SSD NVMe sur le VPS : suffisant pour **SQLite (quelques milliers d’enregistrements)**, logs Docker, scripts.
+  * Compression automatique possible (`VACUUM` SQLite).
+* **Bande Passante** :
+
+  * 500 Mbit/s illimité – pas de coût additionnel pour le crawling (quelques centaines de Mo de data / jour max).
+  * Les bots consomment très peu (quelques Ko / message).
+
+---
+
+### 9.3. Budget Mensuel
+
+| Élément                            | Coût mensuel estimé                                                |
+| ---------------------------------- | ------------------------------------------------------------------ |
+| **VPS (VLE-2)**                    | 4,25 € HT (≈ 5,10 € TTC)                                           |
+| **Nom de domaine (optionnel)**     | \~ 1 € – 2 €                                                       |
+| **Twilio WhatsApp** (usage limité) | Gratuit (jusqu’à un certain quota)                                 |
+| **API OpenRouter (LLM)**           | Gratuit (quelques milliers d’appels) – surveiller le quota mensuel |
+| **Total (hors domaine)**           | **\~ 5 € – 7 €**                                                   |
+
+> **À noter** :
+>
+> * Si tu dépasses le quota OpenRouter, un abonnement modeste (10 – 20 € / mois) couvre un usage plus intensif.
+> * Pour un MVP, la configuration actuelle reste très bon marché (< 7 € / mois).
+
+---
+
+## 10. Roadmap & Phases d’Évolution
+
+### 10.1. Phase 1 : MVP Essentiel (Semaines 1 – 4)
+
+| Tâche                                | Description                                                                                         | Durée estimée |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------- | ------------- |
+| **A. Provision VPS & Setup Initial** | Installation Docker, Docker Compose, structure des répertoires, .env, clés API.                     | 1 jour        |
+| **B. Scraper IA-first (Crawl4AI)**   | 3 conteneurs (5 sites chacun), configuration `config.json`, `run_crawl4ai.py`, tests unitaires.     | 4 jours       |
+| **C. API FastAPI**                   | Endpoints : `/offers`, `/offers?nouveaux=true`, `/offer/{id}`, `/filters`. Tests manuels.           | 3 jours       |
+| **D. Mini-Site Next.js**             | Pages : accueil (`/`, filtres, pagination), détail (`/offer/[id]`), responsive. Déploiement Vercel. | 5 jours       |
+| **E. Bot Telegram (Offres)**         | Script Python, scheduler, test en local, déploiement Docker.                                        | 2 jours       |
+| **F. Bot Admin (Alertes)**           | Micro-service Flask, gestion erreurs, intégration avec Crawl4AI, test.                              | 2 jours       |
+| **G. Bot WhatsApp (optionnel MVP)**  | Script Python Twilio, test, déploiement.                                                            | 2 jours       |
+| **H. Docker Compose & Cron**         | Rédaction du `docker-compose.yml`, config `crontab`, tests bout en bout.                            | 2 jours       |
+| **I. Tests & Validation**            | Tests end-to-end : scraping → DB → API → frontend → bots.                                           | 2 jours       |
+
+> **Total Phase 1 : 23 jours environ** (développeur solo, avec prompts IA pour accélérer la génération de code).
+
+---
+
+### 10.2. Phase 2 : Améliorations IA & Performance (Semaines 5 – 8)
+
+| Tâche                                            | Description                                                                                                     | Durée estimée |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- | ------------- |
+| **A. Optimisation du Scraping**                  | Réduire à 2 conteneurs si nécessaire, ajuster `time.sleep`, optimiser prompts LLM.                              | 3 jours       |
+| **B. Migration SQLite → PostgreSQL**             | Export/import, mise à jour des scripts FastAPI, tests de requêtes.                                              | 4 jours       |
+| **C. Ajout de Fuse.js pour recherche full-text** | Intégrer Fuse.js dans Next.js pour recherche instantanée sans appeler l’API.                                    | 3 jours       |
+| **D. Filtres avancés & UI**                      | Ajouter multiselect (location, contrat), autocomplétion dans le champ recherche, loader (skeleton).             | 4 jours       |
+| **E. Monitoring & Healthchecks**                 | Configurer `healthcheck` pour API, ajouter alertes au Bot Admin si conteneur down plus de 5 min, logs rotatifs. | 3 jours       |
+| **F. Tests automatisés**                         | Écrire tests `pytest` pour API, tests Playwright pour UI, tests unitaires pour scrapers.                        | 4 jours       |
+| **G. Automatisation CI/CD**                      | GitHub Actions pour build Docker, push sur Docker Hub, déploiement auto sur VPS (via Docker Compose).           | 3 jours       |
+| **H. Documentation & Guides**                    | Rédiger README global, inclure prompts IA, ajouter guide de déploiement, schémas Mermaid mis à jour.            | 2 jours       |
+
+> **Total Phase 2 : \~ 22 jours**
+
+---
+
+### 10.3. Phase 3 : Extensions & Modules Premium (Semaines 9 – 16)
+
+| Tâche                                               | Description                                                                                                                   | Durée estimée |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| **A. Microservices**                                | Découper monolithe en services : ScraperService, ApiService, BotService, AdminService. Déployer sur Kubernetes (optionnel).   | 6 jours       |
+| **B. Catégorisation IA (spaCy / HuggingFace)**      | Intégrer un modèle local (spaCy) pour extraire “secteur”, “niveaux d’expérience”.                                             | 4 jours       |
+| **C. Recherche Hybride (ElasticSearch / Weaviate)** | Installer ElasticSearch / Weaviate, indexer les offres, adapter API pour requêtes full-text + vectorielles.                   | 5 jours       |
+| **D. Plugin “Recruteur” Minimal**                   | Back-office Next.js : authentification basique (token), formulaire de publication, section statistiques.                      | 6 jours       |
+| **E. Coaching IA (Candidate Coach)**                | Module IA générant lettre de motivation, analyse de CV (prompt IA) sur un endpoint `/ai`.                                     | 5 jours       |
+| **F. Marketplace & Paiement**                       | Intégrer Stripe/PayPal, panel de gestion pour recruteurs, passerelle de paiement, facturation mensuelle.                      | 4 jours       |
+| **G. Monitoring Avancé (Prometheus + Grafana)**     | Installer Prometheus / Grafana, config dashboards (CPU, RAM, latence), alertes Slack/Telegram.                                | 4 jours       |
+| **H. Tests de Charge**                              | Utiliser Locust ou k6 pour tests 100 req/s sur API `/offers`, crawler sous charge, optimiser indexes.                         | 3 jours       |
+| **I. Sécurité & RGPD**                              | Audits légers (OWASP Top 10), implémenter HTTPS (via NGINX), gérer TOS/Privacy pour espace recruteur, cliquer infos perso.    | 4 jours       |
+| **J. Documentation Complète**                       | Générer la documentation API (OpenAPI), ajouter sections “Développement avancé”, “Architecture microservices”, “SDK clients”. | 3 jours       |
+
+> **Total Phase 3 : \~ 44 jours**
+
+---
+
+## 11. Annexes & Ressources Utiles
+
+### 11.1. Prompts IA Recommandés
+
+#### 11.1.1. Prompt pour générer un `Dockerfile` Crawl4AI
+
+```
+Écris un Dockerfile pour Crawl4AI v3.0 qui :
+- Part de l'image `python:3.10-slim`.
+- Installe les dépendances système nécessaires pour Playwright (chromium, etc.).
+- Installe Playwright et Crawl4AI via pip.
+- Copie `config.json` et `run_crawl4ai.py` dans `/app`.
+- Définit `/app/app.db` comme volume pour la base.
+- Met la commande par défaut : `python /app/run_crawl4ai.py --config /app/config.json`.
+```
+
+#### 11.1.2. Prompt pour générer l’API FastAPI
+
+```
+Crée un projet FastAPI qui :
+- Se connecte à un fichier SQLite `app.db` contenant la table `offers`.
+- Expose 3 endpoints :
+  1. GET /offers?page={int}&page_size={int}&location={opt}&contract_type={opt} 
+     → renvoie les offres triées par date_scraped DESC.
+  2. GET /offers?nouveaux=true 
+     → renvoie toutes les offres avec is_new = 1 et met à jour is_new = 0.
+  3. GET /offer/{id} 
+     → renvoie les détails d'une offre donnée par son id.
+  4. GET /filters 
+     → renvoie une liste JSON distincte des `location` et `contract_type`.
+- Documente automatiquement via Swagger.
+Réponds uniquement avec le code Python complet (fichier main.py et requirements.txt).
+```
+
+#### 11.1.3. Prompt pour générer le Bot Telegram
+
+```
+Crée un script Python (`bot_offres.py`) utilisant `python-telegram-bot` qui :
+- Lit `TELEGRAM_TOKEN` de l'environnement, ainsi que `API_URL`.
+- Sur la commande `/start`, envoie un message d'accueil expliquant le fonctionnement.
+- Toutes les heures, appelle `GET {API_URL}/offers?nouveaux=true` et pour chaque offre retournée, envoie :
+  "📌 <title> – <company> (<location>)\n⏰ Publiée : <date_posted>\n🔗 <url>" 
+  en Markdown au chat ID stocké dans `TG_CHANNEL_ID`.
+Réponds uniquement avec le code complet.
+```
+
+#### 11.1.4. Prompt pour générer le Bot WhatsApp
+
+```
+Créé un script Python (`bot_whatsapp.py`) utilisant la lib Twilio qui :
+- Lit `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `WHATSAPP_FROM`, `WHATSAPP_TO`, `API_URL` depuis l'environnement.
+- Toutes les heures, appelle `GET {API_URL}/offers?nouveaux=true` et pour chaque offre, envoie un message WhatsApp :
+  "<title> – <company> (<location>)\nPublié : <date_posted>\nVoir : <url>".
+Réponds uniquement avec le code complet.
+```
+
+---
+
+### 11.2. Bibliothèques & Dépôts GitHub Conseillés
+
+* **Crawl4AI** : [https://github.com/Crawl4AI/crawl4ai](https://github.com/Crawl4AI/crawl4ai)
+* **ScrapeGraphAI** : [https://github.com/MarketSquare/scrapegraphai](https://github.com/MarketSquare/scrapegraphai)
+* **FastAPI** : [https://github.com/tiangolo/fastapi](https://github.com/tiangolo/fastapi)
+* **python-telegram-bot** : [https://github.com/python-telegram-bot/python-telegram-bot](https://github.com/python-telegram-bot/python-telegram-bot)
+* **Twilio Python** : [https://github.com/twilio/twilio-python](https://github.com/twilio/twilio-python)
+* **Next.js** : [https://github.com/vercel/next.js](https://github.com/vercel/next.js)
+* **Tailwind CSS** : [https://github.com/tailwindlabs/tailwindcss](https://github.com/tailwindlabs/tailwindcss)
+* **APScheduler** : [https://github.com/agronholm/apscheduler](https://github.com/agronholm/apscheduler)
+* **Tweepy (Twitter)** : [https://github.com/tweepy/tweepy](https://github.com/tweepy/tweepy)
+
+---
+
+### 11.3. Checklist de Validation
+
+Avant de déclarer la mise en production du MVP, vérifie :
+
+1. 🟢 **Scraping**
+
+   * [ ] Les 3 conteneurs Crawl4AI s’exécutent sans erreur sur 5 sites chacun.
+   * [ ] Seules les nouvelles offres apparaissent dans la base (`is_new` devient 0 après lecture).
+   * [ ] Les erreurs de scraping (CSS manquant, page 404) génèrent bien une alerte via Bot Admin.
+
+2. 🟢 **Base de Données**
+
+   * [ ] Table `offers` créée et populée correctement.
+   * [ ] Les colonnes `title`, `company`, `location`, `date_posted`, `contract_type`, `url` sont remplies.
+
+3. 🟢 **API**
+
+   * [ ] `GET /offers` fonctionne avec pagination et filtres `location` / `contract_type`.
+   * [ ] `GET /offers?nouveaux=true` retourne les offres `is_new = 1` et les marque `is_new = 0`.
+   * [ ] `GET /offer/{id}` retourne les détails complets.
+   * [ ] `GET /filters` retourne la liste `locations` et `contract_types` actuelles.
+
+4. 🟢 **Mini-Site Next.js**
+
+   * [ ] La page d’accueil (`/`) affiche une liste paginée d’offres.
+   * [ ] Les filtres fonctionnent (sélection de `location` / `contract_type`).
+   * [ ] La recherche par mot-clé fonctionne (Fuse.js ou backend).
+   * [ ] La page détail (`/offer/[id]`) affiche correctement les champs et un bouton “Voir détails”.
+
+5. 🟢 **Bots de Diffusion**
+
+   * [ ] Bot Telegram envoie bien les nouvelles offres toutes les heures.
+   * [ ] Bot WhatsApp (Twilio) envoie l’alerte pour chaque nouvelle offre.
+   * [ ] Bot Twitter publie un tweet pour chaque nouvelle offre (optionnel).
+   * [ ] Aucun doublon : chaque offre n’est envoyée qu’une seule fois.
+
+6. 🟢 **Bot Admin**
+
+   * [ ] En cas d’erreur de scraping, un message est envoyé au canal admin.
+   * [ ] Si un crawler redémarre 3 fois en moins de 30 minutes, Bot Admin informe.
+
+7. 🟢 **Déploiement & Monitoring**
+
+   * [ ] Tous les conteneurs se lancent sans erreur (`docker-compose up --build`).
+   * [ ] Les logs Docker sont visibles et rotatifs (max-size=10m, max-file=3).
+   * [ ] Le cron redémarre bien les crawlers aux horaires prévus.
+   * [ ] Surveillance server (htop, docker stats) sans OOM ou pics trop fréquents.
+
+---
+
+## Conclusion
+
+Cette documentation regroupe **l’ensemble des parties** : du choix du scraper IA-first (Crawl4AI), à l’architecture modulaire (Scraping → DB → API → Frontend → Bots), en passant par la configuration détaillée (Docker, scripts, cron), l’estimation des ressources, le plan de déploiement, et la roadmap d’évolution.
+
+En respectant chacune des étapes, tu disposeras d’un MVP fonctionnel en **environ 23 jours** de travail solo **(Phase 1)**, pour un coût mensuel très bas (**\~ 5 € – 7 €**) et une maintenance réduite.
+
+Les **phases suivantes** (2 et 3) te permettront d’ajouter progressivement de l’IA avancée (recherche sémantique, back-office recruteur, coaching IA) tout en gardant une base solide et un déploiement automatisé.
+
+Bonne mise en œuvre et n’hésite pas à revenir pour toute précision complémentaire !
