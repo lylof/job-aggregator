@@ -17,7 +17,7 @@ export interface JobCardProps {
   skills: string[];
   postedDate: string;
   salaryRange?: string;
-  slug: string;
+  slug?: string; // Peut être l'item_id si non fourni
 }
 
 const JobCard = ({
@@ -33,6 +33,7 @@ const JobCard = ({
   slug
 }: JobCardProps) => {
   // Fallbacks pour les champs critiques
+  const fallbackSlug = slug || String(id);
   const fallbackJobType = jobType || 'à plein temps';
   const fallbackSalary = salaryRange || 'À négocier';
   const fallbackSkills = Array.isArray(skills) && skills.length > 0 ? skills : ['Aucune compétence renseignée'];
@@ -47,7 +48,7 @@ const JobCard = ({
   }
 
   return (
-    <Link href={`/job/${slug}`} className="block group">
+    <Link href={`/job/${fallbackSlug}`} className="block group">
       <article className="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700/80 rounded-xl p-4 sm:p-6 hover:border-neutral-300 dark:hover:border-neutral-600 hover:shadow-card-hover transition-all duration-300 flex flex-col md:flex-row md:items-start gap-3 sm:gap-5">
         {/* Logo de l'entreprise */}
         <div className="relative min-w-[48px] sm:min-w-[56px] w-12 sm:w-14 h-12 sm:h-14 rounded-lg overflow-hidden bg-neutral-100 dark:bg-neutral-700 flex-shrink-0 mt-0.5 sm:mt-1">

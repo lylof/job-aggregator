@@ -1,21 +1,7 @@
-import os
 from dotenv import load_dotenv
 
 # Charger les variables d'environnement
 load_dotenv()
-
-# Configuration de la base de données
-DB_USER = os.getenv("DB_USER", "job_agg_user")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "1606")
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_PORT = os.getenv("DB_PORT", "5432")
-DB_NAME = os.getenv("DB_NAME", "job_aggregator")
-
-# Afficher les informations de connexion pour le débogage
-print(f"Informations de connexion chargées - Utilisateur: {DB_USER}, Base: {DB_NAME}")
-
-# Construction de la chaîne de connexion
-DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 # Configuration de l'API
 API_VERSION = "v1"

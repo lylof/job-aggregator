@@ -2,13 +2,23 @@
 import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
-import { searchJobs } from '@/services/api';
+import { searchJobs, searchItems, mapItemToJobOffer } from '@/services/api';
 import JobCard from '@/components/jobs/JobCard';
 import LoadingJobList from '@/components/jobs/LoadingJobList';
 import { FaSadTear } from 'react-icons/fa';
 
 const fetcher = async (q: string, page: number) => {
   if (!q) return { items: [], total_pages: 1 };
+  // Essayer d'abord le nouveau système (items)
+  const itemsRes = await searchItems({ type: 'job', q }, page, 10);
+  if (itemsRes.items && itemsRes.items.length > 0) {
+    // Mapper les items au format JobOffer
+    return {
+      ...itemsRes,
+      items: itemsRes.items.map(mapItemToJobOffer),
+    };
+  }
+  // Fallback sur l'ancien système si aucun résultat
   return await searchJobs(q, page, 10);
 };
 

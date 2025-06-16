@@ -10,7 +10,7 @@ const api = axios.create({
 });
 
 export interface JobOffer {
-  id: number;
+  id: string;
   title: string;
   company: string;
   company_logo?: string;
@@ -32,14 +32,61 @@ export interface PaginatedResponse<T> {
   total_pages: number;
 }
 
-export const getJobs = async (
+// Nouveau : Types pour items_cache (Supabase)
+export interface ItemCache {
+  item_id: string;
+  item_provider: string;
+  item_type: string;
+  source_type: string;
+  source_name?: string;
+  created_at?: string;
+  updated_at?: string;
+  item_posted_at?: string;
+  item_expires_at?: string;
+  item_title?: string;
+  company_name?: string;
+  item_employment_type?: string;
+  item_is_remote?: boolean;
+  item_city?: string;
+  item_state?: string;
+  item_country?: string;
+  item_latitude?: number;
+  item_longitude?: number;
+  item_description?: string;
+  item_highlights?: Record<string, any>;
+  raw_data: Record<string, any>;
+  sync_batch_id?: string;
+  is_active?: boolean;
+  job_detailed?: boolean;
+  details_fetched_at?: string;
+  job_full_data?: Record<string, any>;
+}
+
+// Mapping ItemCache -> JobOffer (pour compatibilité composants)
+export function mapItemToJobOffer(item: ItemCache): JobOffer {
+  return {
+    id: item.item_id,
+    title: item.item_title || '',
+    company: item.company_name || '',
+    company_logo: '', // à enrichir si possible
+    location: [item.item_city, item.item_country].filter(Boolean).join(', '),
+    description: item.item_description || '',
+    skills: item.item_highlights?.qualifications || [],
+    posted_date: item.item_posted_at || item.created_at || '',
+    salary_range: '', // à enrichir si possible
+    job_type: item.item_employment_type || '',
+    slug: item.item_id, // fallback, à améliorer si besoin
+    date_posted_local: item.item_posted_at || '',
+  };
+}
+
+// Récupérer les items depuis /items (API Supabase via FastAPI)
+export const getItems = async (
   page = 1, 
   pageSize = 10, 
   filters?: Record<string, any>
-): Promise<PaginatedResponse<JobOffer>> => {
-  try {
-    let url = `/job-offers/?page=${page}&page_size=${pageSize}`;
-    
+): Promise<PaginatedResponse<ItemCache>> => {
+  let url = `/items?page=${page}&page_size=${pageSize}`;
     if (filters) {
       Object.entries(filters).forEach(([key, value]) => {
         if (value) {
@@ -47,50 +94,36 @@ export const getJobs = async (
         }
       });
     }
-    
     const response = await api.get(url);
+  // Si l'API backend fournit la pagination, utilise-la, sinon fallback
+  if (
+    response.data &&
+    typeof response.data === 'object' &&
+    'items' in response.data &&
+    'total' in response.data
+  ) {
     return response.data;
-  } catch (error) {
-    console.error('Error fetching jobs:', error);
-    throw error;
   }
+  // Fallback : on retourne tout comme une seule page
+  return {
+    items: response.data,
+    total: response.data.length,
+    page,
+    page_size: pageSize,
+    total_pages: 1,
+  };
 };
 
-export const searchJobs = async (
-  query: string,
+// Recherche d'items (par type, pays, etc.)
+export const searchItems = async (
+  filters: Record<string, any>,
   page = 1,
   pageSize = 10
-): Promise<PaginatedResponse<JobOffer>> => {
-  try {
-    const url = `/search/?q=${encodeURIComponent(query)}&page=${page}&page_size=${pageSize}`;
-    const response = await api.get(url);
-    return response.data;
-  } catch (error) {
-    console.error('Error searching jobs:', error);
-    throw error;
-  }
+): Promise<PaginatedResponse<ItemCache>> => {
+  return getItems(page, pageSize, filters);
 };
 
-export const getJobById = async (id: number): Promise<JobOffer> => {
-  try {
-    const response = await api.get(`/job-offers/${id}`);
-    return response.data;
-  } catch (error) {
-    console.error(`Error fetching job with ID ${id}:`, error);
-    throw error;
-  }
-};
-
-export const getJobBySlug = async (slug: string): Promise<JobOffer> => {
-  try {
-    const response = await api.get(`/job-offers/slug/${slug}`);
-    return response.data;
-  } catch (error) {
-    console.error(`Error fetching job with slug ${slug}:`, error);
-    throw error;
-  }
-};
-
+// Statistiques globales (optionnel)
 export const getStatistics = async () => {
   try {
     const response = await api.get('/statistics/');
@@ -98,6 +131,36 @@ export const getStatistics = async () => {
   } catch (error) {
     console.error('Error fetching statistics:', error);
     throw error;
+  }
+};
+
+// Récupérer un item par ID (pour la page détail)
+export const getItemById = async (itemId: string): Promise<JobOffer> => {
+  const response = await api.get(`/items/${encodeURIComponent(itemId)}`);
+  const item = response.data;
+  return mapItemToJobOffer(item);
+};
+
+// Récupérer dynamiquement les options de filtre depuis l'API
+export const getFilters = async () => {
+  try {
+    const response = await api.get('/items/filters');
+    if (response.data && response.data.error) {
+      // Affiche un message d'erreur utilisateur
+      alert('Erreur lors de la récupération des filtres : ' + response.data.error + '\nVérifiez la connexion à la base de données ou contactez l\'administrateur.');
+    }
+    return response.data;
+  } catch (error) {
+    console.error('Erreur lors de la récupération des filtres:', error);
+    // Fallback : retourne des filtres vides pour éviter le crash du frontend
+    alert('Erreur critique lors de la récupération des filtres. Vérifiez la connexion au backend.');
+    return {
+      types: [],
+      countries: [],
+      cities: [],
+      contracts: [],
+      skills: [],
+    };
   }
 };
 

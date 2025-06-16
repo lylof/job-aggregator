@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import JobCard, { JobCardProps } from './JobCard';
 import { FaSadTear } from 'react-icons/fa';
-import { getJobs } from '@/services/api';
+import { getItems, mapItemToJobOffer } from '@/services/api';
 
 // Composant de pagination avec style "linear app design"
 const Pagination = ({ 
@@ -103,70 +103,6 @@ const Pagination = ({
   );
 };
 
-// Données de test pour le développement
-const MOCK_JOBS: JobCardProps[] = [
-  {
-    id: '1',
-    title: 'Développeur Frontend React',
-    company: 'TechSolutions',
-    companyLogo: 'https://via.placeholder.com/150',
-    location: 'Paris, France',
-    jobType: 'CDI',
-    skills: ['React', 'TypeScript', 'Tailwind CSS'],
-    postedDate: '2025-05-20',
-    salaryRange: '45k€ - 60k€',
-    slug: 'developpeur-frontend-react'
-  },
-  {
-    id: '2',
-    title: 'Ingénieur Backend Node.js',
-    company: 'DataInnovate',
-    companyLogo: 'https://via.placeholder.com/150',
-    location: 'Lyon, France',
-    jobType: 'CDI',
-    skills: ['Node.js', 'MongoDB', 'Express', 'AWS'],
-    postedDate: '2025-05-22',
-    salaryRange: '50k€ - 65k€',
-    slug: 'ingenieur-backend-nodejs'
-  },
-  {
-    id: '3',
-    title: 'UX/UI Designer',
-    company: 'DesignMasters',
-    companyLogo: 'https://via.placeholder.com/150',
-    location: 'Bordeaux, France',
-    jobType: 'Freelance',
-    skills: ['Figma', 'Adobe XD', 'Sketch'],
-    postedDate: '2025-05-25',
-    salaryRange: '400€ - 500€ / jour',
-    slug: 'ux-ui-designer'
-  },
-  {
-    id: '4',
-    title: 'Data Scientist',
-    company: 'AIForAll',
-    companyLogo: 'https://via.placeholder.com/150',
-    location: 'Remote',
-    jobType: 'CDD',
-    skills: ['Python', 'TensorFlow', 'PyTorch', 'SQL'],
-    postedDate: '2025-05-18',
-    salaryRange: '55k€ - 70k€',
-    slug: 'data-scientist'
-  },
-  {
-    id: '5',
-    title: 'DevOps Engineer',
-    company: 'CloudMasters',
-    companyLogo: 'https://via.placeholder.com/150',
-    location: 'Lille, France',
-    jobType: 'CDI',
-    skills: ['Docker', 'Kubernetes', 'CI/CD', 'Terraform'],
-    postedDate: '2025-05-15',
-    salaryRange: '60k€ - 75k€',
-    slug: 'devops-engineer'
-  },
-];
-
 type JobListProps = {
   filters: {
     contractTypes: string[];
@@ -183,62 +119,39 @@ const JobList = ({ filters }: JobListProps) => {
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [useMockData, setUseMockData] = useState(false);
 
-  // Charger des données de test
-  const loadMockData = () => {
-    console.log("Chargement des données de test...");
-    setLoading(true);
-    
-    // Simuler un délai de chargement
-    setTimeout(() => {
-      const itemsPerPage = 3;
-      const startIndex = (currentPage - 1) * itemsPerPage;
-      const endIndex = startIndex + itemsPerPage;
-      const paginatedJobs = MOCK_JOBS.slice(startIndex, endIndex);
-      
-      setJobs(paginatedJobs);
-      setTotalPages(Math.ceil(MOCK_JOBS.length / itemsPerPage));
-      setError(null);
-      setLoading(false);
-    }, 500);
-  };
-
-  // Activer les données de test
-  const enableMockData = () => {
-    setUseMockData(true);
-    setCurrentPage(1);
-  };
-
-  // Récupérer les données de l'API
+  // Récupérer les données de l'API Supabase
   const fetchApiData = async () => {
     try {
       // Construction des filtres pour l'API
       const apiFilters: Record<string, any> = {};
-      if (filters.contractTypes.length > 0) apiFilters.contract_type = filters.contractTypes.join(',');
+      if (filters.contractTypes.length > 0) apiFilters.item_employment_type = filters.contractTypes.join(',');
       if (filters.experienceLevels.length > 0) apiFilters.experience = filters.experienceLevels.join(',');
-      if (filters.locations.length > 0) apiFilters.location = filters.locations.join(',');
-      if (filters.skills.length > 0) apiFilters.skill = filters.skills;
+      if (filters.locations.length > 0) apiFilters.item_city = filters.locations.join(',');
+      if (filters.skills.length > 0) apiFilters.skills = filters.skills.join(',');
 
-      const data = await getJobs(currentPage, 10, apiFilters);
-      const transformedJobs = data.items.map((job: any) => ({
+      const data = await getItems(currentPage, 10, apiFilters);
+      const transformedJobs = data.items.map((item) => {
+        const job = mapItemToJobOffer(item);
+        return {
         id: job.id,
         title: job.title,
         company: job.company,
         companyLogo: job.company_logo,
         location: job.location,
         jobType: job.job_type,
-        skills: job.skills || [],
+          skills: job.skills,
         postedDate: job.posted_date,
         salaryRange: job.salary_range,
-        slug: job.slug
-      }));
+          slug: job.slug,
+        };
+      });
       setJobs(transformedJobs);
       setTotalPages(data.total_pages);
       setError(null);
     } catch (err) {
       console.error('Erreur:', err);
-      setError("Impossible de charger les offres d'emploi. Cliquez sur 'Utiliser des données de test' pour voir un exemple.");
+      setError("Impossible de charger les offres d'emploi.");
       setJobs([]);
     } finally {
       setLoading(false);
@@ -254,13 +167,9 @@ const JobList = ({ filters }: JobListProps) => {
   // Effet pour charger les données
   useEffect(() => {
     setLoading(true);
-    if (useMockData) {
-      loadMockData();
-    } else {
       fetchApiData();
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, useMockData, filters]);
+  }, [currentPage, filters]);
 
   // Affichage en cas de chargement
   if (loading && jobs.length === 0) {
@@ -288,12 +197,6 @@ const JobList = ({ filters }: JobListProps) => {
             className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg shadow-sm hover:shadow-md transition-all"
           >
             Réessayer
-          </button>
-          <button 
-            onClick={() => enableMockData()}
-            className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg shadow-sm hover:shadow-md transition-all"
-          >
-            Utiliser des données de test
           </button>
         </div>
       </div>

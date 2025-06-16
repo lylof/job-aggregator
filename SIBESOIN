@@ -1,0 +1,8 @@
+DB_USER=job_agg_user
+DB_PASSWORD=1606  # Remplacer par le mot de passe défini lors de l'installation
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=job_aggregator_db  # Créer cette base de données dans pgAdmin
+
+API_HOST=0.0.0.0
+API_PORT=8000

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { FaChevronDown, FaChevronUp } from 'react-icons/fa';
+import { getFilters } from '@/services/api';
 
 // Types pour les options de filtre
 type FilterOption = {
@@ -9,41 +10,6 @@ type FilterOption = {
   label: string;
   count?: number;
 };
-
-// Données des filtres
-const contractTypes: FilterOption[] = [
-  { id: 'full-time', label: 'CDI', count: 120 },
-  { id: 'part-time', label: 'Temps partiel', count: 45 },
-  { id: 'internship', label: 'Stage', count: 38 },
-  { id: 'freelance', label: 'Freelance', count: 67 },
-  { id: 'temporary', label: 'CDD', count: 53 },
-];
-
-const experienceLevels: FilterOption[] = [
-  { id: 'entry', label: 'Débutant', count: 98 },
-  { id: 'mid', label: 'Confirmé', count: 145 },
-  { id: 'senior', label: 'Sénior', count: 82 },
-  { id: 'expert', label: 'Expert', count: 41 },
-];
-
-const locations: FilterOption[] = [
-  { id: 'paris', label: 'Paris', count: 87 },
-  { id: 'lyon', label: 'Lyon', count: 45 },
-  { id: 'marseille', label: 'Marseille', count: 33 },
-  { id: 'bordeaux', label: 'Bordeaux', count: 28 },
-  { id: 'remote', label: 'Télétravail', count: 113 },
-];
-
-const skills: FilterOption[] = [
-  { id: 'javascript', label: 'JavaScript', count: 98 },
-  { id: 'python', label: 'Python', count: 76 },
-  { id: 'react', label: 'React', count: 64 },
-  { id: 'java', label: 'Java', count: 59 },
-  { id: 'nodejs', label: 'Node.js', count: 53 },
-  { id: 'typescript', label: 'TypeScript', count: 48 },
-  { id: 'aws', label: 'AWS', count: 42 },
-  { id: 'docker', label: 'Docker', count: 39 },
-];
 
 // Composant de section de filtre
 const FilterSection = ({ 
@@ -126,6 +92,20 @@ const FilterPanel = ({ filters, onApplyFilters, onResetFilters }: FilterPanelPro
   const [selectedLocations, setSelectedLocations] = useState<string[]>(filters.locations);
   const [selectedSkills, setSelectedSkills] = useState<string[]>(filters.skills);
   const [showFiltersMobile, setShowFiltersMobile] = useState(false);
+
+  // Nouveaux états pour les options dynamiques
+  const [contractTypeOptions, setContractTypeOptions] = useState<FilterOption[]>([]);
+  const [locationOptions, setLocationOptions] = useState<FilterOption[]>([]);
+  const [skillsOptions, setSkillsOptions] = useState<FilterOption[]>([]);
+
+  useEffect(() => {
+    // Charger dynamiquement les options de filtre depuis l'API
+    getFilters().then((data) => {
+      setContractTypeOptions((data.contracts || []).map((c: string) => ({ id: c, label: c })));
+      setLocationOptions((data.cities || []).map((c: string) => ({ id: c, label: c })));
+      setSkillsOptions((data.skills || []).map((s: string) => ({ id: s, label: s })));
+    });
+  }, []);
 
   // Synchroniser les états locaux si les props changent (reset)
   useEffect(() => {
@@ -214,28 +194,32 @@ const FilterPanel = ({ filters, onApplyFilters, onResetFilters }: FilterPanelPro
         <div className="space-y-1">
         <FilterSection 
           title="Type de contrat"
-          options={contractTypes}
+          options={contractTypeOptions}
           selectedOptions={selectedContractTypes}
           onChange={handleContractTypeChange}
         />
-        <FilterSection 
+        {/* <FilterSection 
           title="Niveau d'expérience"
           options={experienceLevels}
           selectedOptions={selectedExperienceLevels}
           onChange={handleExperienceLevelChange}
-        />
+        /> */}
         <FilterSection 
           title="Localisation"
-          options={locations}
+          options={locationOptions}
           selectedOptions={selectedLocations}
           onChange={handleLocationChange}
         />
         <FilterSection 
           title="Compétences"
-          options={skills}
+          options={skillsOptions}
           selectedOptions={selectedSkills}
           onChange={handleSkillChange}
         />
+        {/* Fallback si aucune option */}
+        {contractTypeOptions.length === 0 && locationOptions.length === 0 && skillsOptions.length === 0 && (
+          <div className="text-sm text-neutral-500 dark:text-neutral-400 py-4">Aucune option de filtre disponible.</div>
+        )}
       </div>
 
       <div className="mt-6 sm:mt-8 pt-4 sm:pt-6 border-t border-neutral-200 dark:border-neutral-700 space-y-2 sm:space-y-3">

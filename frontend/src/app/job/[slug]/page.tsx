@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import JobDetail from '@/components/jobs/JobDetail';
 import LoadingJobDetail from '@/components/jobs/LoadingJobDetail';
-import { getJobBySlug } from '@/services/api';
+import { getItemById } from '@/services/api';
 
 // Définition des paramètres de page
 type PageProps = {
@@ -14,9 +14,9 @@ type PageProps = {
 // Récupération des données côté serveur
 const getJob = async (slug: string) => {
   try {
-    const job = await getJobBySlug(slug);
+    const job = await getItemById(slug);
     return job;
-  } catch (error) {
+  } catch (e) {
     return null;
   }
 };
