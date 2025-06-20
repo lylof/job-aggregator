@@ -136,7 +136,7 @@ export const getStatistics = async () => {
 
 // Récupérer un item par ID (pour la page détail)
 export const getItemById = async (itemId: string): Promise<JobOffer> => {
-  const response = await api.get(`/items/${encodeURIComponent(itemId)}`);
+  const response = await api.get(`/items/${itemId}`);
   const item = response.data;
   return mapItemToJobOffer(item);
 };
