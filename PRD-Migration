@@ -1,0 +1,360 @@
+
+### **PRD & Spécification Technique v2.0**
+### **Projet : Job Board Modulaire pour l'Afrique Francophone**
+
+**Date:** {{ Date.now() | date }}
+**Version:** 2.0
+**Type:** Spécification Technique et Stratégique
+
+---
+
+### **Table des Matières**
+
+1.  **Résumé Exécutif (Mis à jour)**
+2.  **Contexte et Objectifs (Mis à jour)**
+3.  **Architecture Globale (Mis à jour)**
+4.  **Choix Technologiques (Mis à jour)**
+5.  **Base de Données PostgreSQL (Mis à jour)**
+6.  **Cron Jobs et Ingestion (Mis à jour)**
+7.  **API Interne FastAPI (Mis à jour)**
+8.  **Cache et Optimisation**
+9.  **Tests et Validation**
+10. **Déploiement et Documentation (Mis à jour)**
+11. **Annexes et Ressources**
+
+---
+
+### **1. Résumé Exécutif (Mis à jour)**
+
+#### **Objectif Principal**
+Développer et lancer un Job Board pour l'**Afrique francophone** en utilisant une architecture 100% API, modulaire et évolutive. Le système s'appuiera initialement sur des sources de données externes (JSearch API, flux RSS) pour constituer une base d'offres solide (Phase 1), avec l'objectif stratégique de transitionner vers une plateforme autonome où les recruteurs publient directement leurs offres (Phase 2).
+
+#### **Bénéfices Attendus**
+Amélioration des performances, **contrôle total des coûts d'infrastructure grâce à une utilisation stratégique des quotas API**, et scalabilité automatique pour supporter la croissance future, y compris l'ajout de nouvelles catégories comme les **bourses d'études**.
+
+#### **Phases Clés du Projet**
+*   **Phase 1 (MVP - Lancement)** : Agrégation d'offres d'emploi via JSearch et potentiellement des flux RSS pour l'Afrique francophone. L'accent est mis sur la constitution rapide d'une base de données riche.
+*   **Phase 2 (Évolution - 3 à 6 mois post-lancement)** : Activation du portail recruteur pour la publication directe, optimisation des sources de données (filtrage dynamique pour gérer les doublons/coûts), et introduction de la section "Bourses".
+*   **Phase 3 (Maturité)** : Réduction progressive de la dépendance aux agrégateurs externes pour devenir une plateforme leader et autonome.
+
+#### **Points Clés de l'Architecture**
+*   **Sources de données multiples** : JSearch (API) et Flux RSS gérés de manière flexible.
+*   **Backend Modulaire** : FastAPI pour permettre l'ajout facile de nouveaux types de contenu (offres, bourses).
+*   **Base de Données Évolutive** : Schéma PostgreSQL conçu dès le départ pour distinguer les "jobs" des "bourses".
+*   **Optimisation des Coûts** : Synchronisation des offres limitée à 2 fois par jour pour préserver les quotas API.
+
+---
+
+### **2. Contexte et Objectifs (Mis à jour)**
+
+#### **Situation Actuelle**
+*   **Source de données principale** : L'API JSearch (via RapidAPI) est utilisée comme source primaire pour agréger les offres d'emploi (notamment de Google for Jobs) ciblant les pays d'Afrique francophone.
+*   **Sources de données secondaires** : Des flux RSS de sites d'emploi locaux (ex: `emploitogo.info`) sont identifiés comme sources potentielles pour enrichir ou remplacer certaines données de JSearch à l'avenir.
+*   **Système existant** : Pas de système actuel, migration depuis une idée vers une architecture concrète et phasée.
+
+#### **Objectifs de Migration et de Développement**
+*   **Fiabilité** : API professionnelle avec SLA garanti sur les sources externes.
+*   **Évolutivité** : Architecture serverless conçue pour gérer différents types de contenu (offres, bourses) et pour accueillir un portail recruteur.
+*   **Contrôle des Coûts** : Optimisation drastique de l'usage des API payantes et utilisation du plan gratuit de Supabase.
+
+#### **Critères de Succès (Mis à jour)**
+*   **Disponibilité** : `99.9%`
+*   **Temps de réponse API** : `<500ms` (P95)
+*   **Synchronisation des jobs** : **`2x/jour`** (matin et soir pour économiser les quotas)
+*   **Coût infrastructure initiale** : `0€`
+
+---
+
+### **3. Architecture Globale (Mis à jour)**
+
+#### **Diagramme de Flux de Données (Conceptuellement mis à jour)**
+
+```mermaid
+graph TD
+    subgraph Phase 1 & 2
+        subgraph Orchestration [GitHub Actions (Cron Jobs)]
+            A[Cron 2x/jour] --> B{Script d'Ingestion};
+        end
+        subgraph Sources Externes
+            JSearch[JSearch API];
+            RSS[Flux RSS (Optionnel en Phase 2)];
+        end
+
+        B --> JSearch;
+        B --> RSS;
+
+        JSearch --> C[UPSERT dans Supabase];
+        RSS --> C;
+    end
+
+    subgraph Phase 2
+        Recruiter[Portail Recruteur] --> API;
+    end
+
+    subgraph Exposition
+        API[API Interne (FastAPI)];
+        C --> API;
+        Frontend[Front-end App (React/Vue/...)] --> API;
+        API --> Redis[(Redis Cache - Optionnel)];
+        API --> JSearchDetails[JSearch /job-details (À la demande)];
+    end
+
+    style C fill:#d4edda,stroke:#155724
+    style Recruiter fill:#f8d7da,stroke:#721c24
+```
+
+#### **Composants Principaux (Mis à jour)**
+*   **Cron Jobs (GitHub Actions)** : Orchestration des appels aux sources externes (API et RSS) et synchronisation des données, **optimisée à 2 fois par jour**.
+*   **JSearch API** : Source de données principale en Phase 1.
+*   **Flux RSS** : Sources de données complémentaires activables en Phase 2 pour maîtriser les coûts et la qualité.
+*   **Supabase PostgreSQL** : Base de données managed, avec un schéma **modulaire** pour gérer offres et bourses.
+*   **API Interne (FastAPI)** : Expose les données au front-end, avec des endpoints conçus pour être génériques.
+*   **(Futur) Portail Recruteur** : Module à activer en Phase 2, qui permettra la soumission d'offres directement via l'API interne.
+
+---
+
+### **4. Choix Technologiques (Mis à jour)**
+
+#### **Recommandations Finales**
+*   **API Backend** : FastAPI (Python)
+*   **Base de données** : Supabase PostgreSQL
+*   **Cron Jobs** : GitHub Actions
+*   **Cache** : Redis (optionnel)
+*   **Déploiement** : Vercel/Railway
+
+#### **Comparaison FastAPI vs Express**
+*(Contenu original conservé...)*
+
+#### **Nouvelle Section : Stratégie des Sources de Données**
+
+L'architecture est conçue pour être agnostique à la source de données, suivant une approche phasée :
+
+*   **Phase 1 (MVP - Maximiser le contenu)** :
+    *   Le script d'ingestion utilise **uniquement JSearch** pour toutes les requêtes.
+    *   Même si une source (ex: `job-senegal.com`) est disponible en RSS, on la récupère via JSearch pour simplifier le MVP et maximiser le volume initial.
+    *   L'objectif est de lancer la plateforme avec le plus d'offres possible.
+
+*   **Phase 2 (Optimisation - Contrôle et Qualité)** :
+    *   **Activation du filtrage dynamique** : Une liste de domaines (`excluded_sources = ['emploitogo.info', ...]`) est maintenue dans la configuration du script d'ingestion.
+    *   Avant de lancer une requête JSearch, le script peut filtrer les résultats pour exclure les offres provenant de ces domaines.
+    *   Parallèlement, le script peut être étendu pour parser directement les flux RSS de ces mêmes sources.
+    *   **Avantages** :
+        1.  **Économie de quotas** : On ne "paie" pas pour des offres qu'on peut avoir gratuitement.
+        2.  **Qualité des données** : On maîtrise directement la donnée du flux RSS, sans passer par un intermédiaire.
+        3.  **Flexibilité** : Cette logique est gérée **côté code**, sans aucune modification de la base de données. On peut activer/désactiver une source RSS en modifiant une simple liste de configuration.
+
+---
+
+### **5. Base de Données PostgreSQL (Mis à jour)**
+
+#### **Schéma de la Table `items_cache` (Anciennement `jobs_cache`)**
+La table est renommée et étendue pour la modularité.
+
+```sql
+CREATE TABLE items_cache (
+    -- Clé primaire composite pour déduplication
+    item_id VARCHAR(255) NOT NULL,
+    item_provider VARCHAR(100) NOT NULL,
+
+    -- NOUVEAU: Colonnes pour la modularité et la traçabilité
+    item_type VARCHAR(20) NOT NULL DEFAULT 'job', -- 'job', 'bourse', etc.
+    source_type VARCHAR(20) NOT NULL, -- 'api', 'rss', 'direct'
+    source_name VARCHAR(100), -- 'jsearch', 'emploitogo.info', 'recruteur_x'
+
+    -- Métadonnées de synchronisation
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    item_posted_at TIMESTAMP WITH TIME ZONE,
+    item_expires_at TIMESTAMP WITH TIME ZONE,
+
+    -- Informations principales (génériques)
+    item_title VARCHAR(500),
+    company_name VARCHAR(300),
+    -- ... autres champs renommés de 'job_' à 'item_' ou gardés génériques
+    item_employment_type VARCHAR(100), -- FULLTIME, PARTTIME, CONTRACTOR
+    item_is_remote BOOLEAN DEFAULT FALSE,
+
+    -- Localisation
+    item_city VARCHAR(200),
+    item_state VARCHAR(100),
+    item_country VARCHAR(100),
+    item_latitude DECIMAL(10,8),
+    item_longitude DECIMAL(11,8),
+
+    -- Contenu
+    item_description TEXT,
+    item_highlights JSONB, -- qualifications, responsibilities, benefits
+    -- ... autres champs
+    raw_data JSONB NOT NULL, -- Backup complet de la source
+
+    -- Métadonnées système
+    sync_batch_id VARCHAR(100),
+    is_active BOOLEAN DEFAULT TRUE,
+
+    -- Contraintes
+    PRIMARY KEY (item_id, item_provider),
+    CONSTRAINT unique_item_per_provider UNIQUE (item_id, item_provider)
+);
+
+-- NOUVEAU: Index sur le type d'item pour filtrage rapide
+CREATE INDEX idx_items_cache_type ON items_cache (item_type);
+
+-- Index sur les sources pour le débogage et le filtrage
+CREATE INDEX idx_items_cache_source ON items_cache (source_type, source_name);
+
+-- (Autres index existants adaptés avec le nouveau nom de table/colonnes...)
+```
+
+#### **Stratégie de Déduplication et d'Optimisation**
+*(Contenu original conservé, s'applique toujours à la nouvelle table `items_cache`)*
+
+---
+
+### **6. Cron Jobs et Ingestion (Mis à jour)**
+
+#### **Planning des Synchronisations (Mis à jour)**
+*   **Fréquence** : **2x par jour**
+*   **Jours** : Lundi - Samedi
+*   **Horaires** : **07:00, 19:00 CET** (par exemple)
+
+#### **Configuration GitHub Actions (Mis à jour)**
+```yaml
+name: Items Sync
+on:
+  schedule:
+    # 2 fois par jour (6h et 18h UTC, soit ~7h/19h CET)
+    - cron: '0 6,18 * * 1-6'
+  workflow_dispatch: # Manuel trigger
+```
+*(Le reste de la configuration reste identique)*
+
+#### **Script Python d'Ingestion (Logique mise à jour)**
+Le script `job_sync.py` devient `item_sync.py`.
+
+```python
+# item_sync.py
+
+# NOUVEAU: Fichier de configuration ou variables d'environnement
+# pour la stratégie de source
+EXCLUDED_JSEARCH_SOURCES = os.environ.get('EXCLUDED_SOURCES', '').split(',')
+# -> ['emploitogo.info', 'job-senegal.com']
+
+async def sync_items(self):
+    # ...
+    # 1. (Optionnel en Phase 2) Lancer le parsing des flux RSS
+    # rss_items = await self.fetch_from_rss(EXCLUDED_JSEARCH_SOURCES)
+    # await self.upsert_items(rss_items, source_type='rss')
+
+    # 2. Lancer la recherche via JSearch
+    # La requête JSearch peut être modifiée pour exclure des sites si l'API le permet
+    # ou le filtrage se fait post-récupération
+    queries = ["developpeur afrique francophone", "marketing abidjan", ...]
+    for query in queries:
+        api_items = await self.fetch_jsearch_paginated(query)
+        # Filtrage en post-traitement (simple et efficace)
+        filtered_items = [
+            item for item in api_items
+            if item.get('employer_website') not in EXCLUDED_JSEARCH_SOURCES
+        ]
+        await self.upsert_items(filtered_items, source_type='api', source_name='jsearch')
+    # ...
+```
+*(Le reste du script est adapté pour utiliser les nouveaux noms de colonnes : `item_id`, `item_type`, etc.)*
+
+---
+
+### **7. API Interne FastAPI (Mis à jour)**
+
+L'API est rendue plus générique pour anticiper les futures catégories.
+
+#### **Endpoints Principaux (Mis à jour)**
+*   **`GET /items`** : Remplace `GET /jobs`. Recherche et filtrage avec pagination. Accepte un nouveau paramètre `type` (`job` ou `bourse`).
+*   **`GET /items/{item_id}`** : Remplace `GET /jobs/{job_id}`.
+*   **`GET /stats`** : Reste identique mais agrège les données de la table `items_cache`.
+*   **`POST /items` (Phase 2)** : Endpoint sécurisé pour les recruteurs, leur permettant de soumettre une nouvelle offre (`item_type='job'`, `source_type='direct'`).
+
+#### **Implémentation FastAPI (Extraits mis à jour)**
+```python
+# main.py
+
+# Mise à jour des modèles Pydantic
+class ItemSummary(BaseModel):
+    item_id: str
+    item_type: str # 'job' ou 'bourse'
+    # ... autres champs
+
+# Mise à jour de l'endpoint de recherche
+@app.get("/items", response_model=ItemSearchResponse)
+async def search_items(
+    type: str = Query('job', description="Type d'item: 'job' ou 'bourse'"),
+    # ... autres paramètres de recherche
+):
+    query_builder = supabase.table('items_cache').select(...)
+    
+    # Filtrage obligatoire par type
+    query_builder = query_builder.eq('item_type', type)
+    
+    # ... reste de la logique de filtrage
+```
+
+---
+
+### **8. Cache et Optimisation**
+*(Contenu original entièrement conservé. Les stratégies de cache Redis et d'optimisation PostgreSQL sont toujours pertinentes.)*
+
+---
+
+### **9. Tests et Validation**
+*(Contenu original entièrement conservé. Les exemples de tests Pytest doivent simplement être adaptés aux nouveaux noms d'endpoints (`/items`) et aux nouvelles structures de données.)*
+
+---
+
+### **10. Déploiement et Documentation (Mis à jour)**
+
+#### **Options de Déploiement**
+*(Contenu original conservé)*
+
+#### **Variables d'Environnement**
+```
+# NOUVEAU: Pour la stratégie de source en Phase 2
+EXCLUDED_SOURCES=emploitogo.info,another-site.com
+```
+*(Autres variables conservées)*
+
+#### **README.md Complet (Extrait mis à jour)**
+
+```markdown
+# Job Board API v2.0 - Afrique Francophone
+
+API modulaire pour un job board ciblant l'Afrique francophone, conçue pour une évolution progressive d'un modèle agrégateur vers une plateforme autonome.
+
+## ✨ Philosophie
+
+- **Modularité** : L'architecture est conçue pour supporter plusieurs types de contenu (offres d'emploi, bourses) sans refonte majeure.
+- **Économie de ressources** : Utilisation stratégique des API externes pour minimiser les coûts.
+- **Autonomie** : L'objectif à long terme est de ne plus dépendre des agrégateurs.
+
+## 🗺️ Roadmap Stratégique
+
+### **Phase 1 : MVP (Lancement)**
+- [x] Agrégation d'offres d'emploi via JSearch (2x/jour).
+- [x] Cible : Marchés clés d'Afrique francophone (Côte d'Ivoire, Sénégal, Cameroun...).
+- [x] API de consultation (`GET /items?type=job`).
+
+### **Phase 2 : Évolution (3-6 mois post-lancement)**
+- [ ] Activation du portail recruteur (`POST /items`).
+- [ ] Intégration de la section "Bourses" (`GET /items?type=bourse`).
+- [ ] Implémentation du filtrage de sources pour optimiser les coûts (JSearch + RSS).
+
+### **Phase 3 : Maturité (Au-delà)**
+- [ ] Décommissionnement progressif de JSearch.
+- [ ] Fonctionnalités avancées : alertes, profils entreprise, etc.
+
+<!-- Le reste du README est conservé et adapté -->
+```
+
+---
+
+### **Note finale de l'architecte**
+
+Cette mise à jour transforme le projet d'un simple "job board" en une **plateforme de contenu professionnel évolutive**. Les choix clés (table `items_cache` générique, stratégie de source flexible côté code, roadmap phasée) garantissent que le système est non seulement **économique à lancer**, mais aussi **prêt pour l'avenir** sans nécessiter de refontes coûteuses. La transition vers l'autonomie est intégrée dans l'ADN même de l'architecture.

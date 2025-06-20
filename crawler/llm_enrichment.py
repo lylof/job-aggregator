@@ -45,7 +45,7 @@ class GeminiEnricher(LLMEnricher):
                 text = text[:-3].strip()
         # Parsing JSON principal
         try:
-            enriched_json = json.loads(text)
+            enriched_json = json.loads(text, strict=False)
             print("[LLM enrich] JSON parsing OK")
         except Exception as e:
             print(f"[LLM enrich error] JSON parsing failed: {e}")
@@ -55,7 +55,7 @@ class GeminiEnricher(LLMEnricher):
             match = re.search(r'\{[\s\S]*\}', text)
             if match:
                 try:
-                    enriched_json = json.loads(match.group(0))
+                    enriched_json = json.loads(match.group(0), strict=False)
                     print("[LLM enrich] Fallback JSON parsing OK")
                 except Exception as e2:
                     print(f"[LLM enrich error] Fallback JSON parsing failed: {e2}")

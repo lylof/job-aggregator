@@ -1,4 +1,6 @@
 crawl4ai
 pydantic
 python-dotenv
-playwright 
+supabase
+google-generativeai
+playwright

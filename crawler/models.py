@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 
 class JobOffer(BaseModel):
@@ -26,4 +26,33 @@ class JobOffer(BaseModel):
     job_type: Optional[str] = Field(None, description="Métier / catégorie")
     tags: Optional[List[str]] = Field(None, description="Mots-clés additionnels")
     contact_email: Optional[str] = Field(None, description="Email de contact")
-    other_benefits: Optional[str] = Field(None, description="Avantages divers") 
+    other_benefits: Optional[str] = Field(None, description="Avantages divers")
+
+    # -------------------- VALIDATORS --------------------
+    @field_validator('skills', 'languages', 'tags', mode='before')
+    @classmethod
+    def _ensure_list(cls, v):
+        """Permettre de passer une chaîne séparée par virgules ou une liste."""
+        if v is None:
+            return v
+        if isinstance(v, list):
+            return v
+        if isinstance(v, str):
+            # découpe sur virgule ou retour à la ligne
+            parts = [p.strip() for p in v.replace('\n', ',').split(',')]
+            return [p for p in parts if p]
+        # toute autre valeur : laisser Pydantic gérer
+        return v
+
+    @field_validator('number_of_positions', mode='before')
+    @classmethod
+    def _coerce_int(cls, v):
+        if v is None:
+            return v
+        if isinstance(v, int):
+            return v
+        # Essaye de convertir les chaînes numériques
+        try:
+            return int(v)
+        except Exception:
+            return v 

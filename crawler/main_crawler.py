@@ -9,6 +9,7 @@ from .config import get_target_url
 from .llm_enrichment import GeminiEnricher
 from bs4 import BeautifulSoup
 import csv # Ajout pour l'export CSV
+from .supabase_export import upsert_job_to_supabase
 
 async def main():
     url = get_target_url()
@@ -152,14 +153,14 @@ async def main():
                                         if llm_val not in [None, "", [], {}]:
                                             final_fields[name] = llm_val
                                             extraction_sources[name] = "llm"
-                                                print(f"[LLM enrich] Champ complété : {name} => {llm_val}")
+                                            print(f"[LLM enrich] Champ complété : {name} => {llm_val}")
                                             continue
                                     except Exception as e:
                                         print(f"[LLM fallback] Erreur extraction {name}: {e}")
                                 # 4. Si rien trouvé
                                 if name not in final_fields:
-                                final_fields[name] = None
-                                extraction_sources[name] = "not_found"
+                                    final_fields[name] = None
+                                    extraction_sources[name] = "not_found"
 
                             # MAPPING et type conversion
                             mapped = {}
@@ -196,6 +197,13 @@ async def main():
                                 offer = JobOffer(**mapped)
                                 print(json.dumps(offer.model_dump(), indent=2, ensure_ascii=False))
 
+                                # Export vers Supabase
+                                export_ok = upsert_job_to_supabase(offer.model_dump())
+                                if export_ok:
+                                    print(f"[SUPABASE] Export OK: {mapped.get('source_url') or mapped.get('url')}")
+                                else:
+                                    print(f"[SUPABASE] Export FAIL: {mapped.get('source_url') or mapped.get('url')}")
+
                                 # Enregistrement pour le rapport d'audit
                                 audit_record = {"url": job_url}
                                 for field_name, field_type in JobOffer.model_fields.items():
@@ -203,19 +211,24 @@ async def main():
                                     audit_record[f'{field_name}_raw'] = raw_extracted_fields.get(field_name)
                                     audit_record[f'{field_name}_source'] = extraction_sources.get(field_name, "not_found")
                                 audit_records.append(audit_record)
-
                             except Exception as e:
                                 print(f"Erreur de validation : {e}\nDonnées fusionnées : {mapped}")
                         except Exception as e:
-                            print(f"Erreur lors du décodage JSON détail : {e}")
-                            print(detail_result.extracted_content)
+                            print(f"[ERREUR] Décodage JSON détail pour l'offre {job_url} : {e}")
+                            print(f"Contenu extrait : {detail_result.extracted_content[:500]}...\n--- Fin extrait ---")
+                            continue
                     else:
-                        print(f"Erreur lors de l'extraction des détails : {detail_result.error_message}")
+                        print(f"[ERREUR] Extraction des détails échouée pour l'offre {job_url}.")
+                        print(f"Message d'erreur : {getattr(detail_result, 'error_message', 'Non spécifié')}")
+                        print(f"Statut success: {detail_result.success}, extrait: {bool(detail_result.extracted_content)}")
+                        continue
             except Exception as e:
-                print(f"Erreur lors du décodage JSON : {e}")
-                print(result.extracted_content)
-            else:
-                print(f"Erreur lors du crawl : {result.error_message}")
+                print(f"[ERREUR] Décodage JSON principal : {e}")
+                print(f"Contenu extrait : {result.extracted_content[:500]}...\n--- Fin extrait ---")
+        else:
+            print(f"[ERREUR] Crawl principal échoué.")
+            print(f"Message d'erreur : {getattr(result, 'error_message', 'Non spécifié')}")
+            print(f"Statut success: {result.success}, extrait: {bool(getattr(result, 'extracted_content', None))}")
 
     # Export du rapport d'audit à la fin du crawl
     if audit_records:
