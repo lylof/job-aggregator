@@ -10,6 +10,7 @@ from .llm_enrichment import GeminiEnricher
 from bs4 import BeautifulSoup
 import csv # Ajout pour l'export CSV
 from .supabase_export import upsert_job_to_supabase
+from datetime import datetime
 
 async def main():
     url = get_target_url()
@@ -38,12 +39,66 @@ async def main():
 
     audit_records = [] # Liste pour stocker les enregistrements d'audit
 
+    LAST_SCRAP_FILE = "last_scrap.json"
+    SOURCE_KEY = "emploi.tg"  # À adapter si tu ajoutes d'autres sources
+
+    # Fonctions utilitaires pour le delta scraping
+
+    def get_last_scrap():
+        if not os.path.exists(LAST_SCRAP_FILE):
+            return None
+        with open(LAST_SCRAP_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data.get(SOURCE_KEY)
+
+    def set_last_scrap(new_date):
+        data = {}
+        if os.path.exists(LAST_SCRAP_FILE):
+            with open(LAST_SCRAP_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        data[SOURCE_KEY] = new_date
+        with open(LAST_SCRAP_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+
     async with AsyncWebCrawler(config=browser_cfg) as crawler:
+        # --- SCRAPING INCREMENTAL ---
+        last_scrap = get_last_scrap()
+        print(f"[DELTA SCRAP] Dernier scrap pour {SOURCE_KEY} : {last_scrap}")
         result = await crawler.arun(url, config=crawl_cfg)
         if result.success and result.extracted_content:
             try:
                 data = json.loads(result.extracted_content)
                 print(f"{len(data)} offres extraites :")
+                # Filtrage delta : ne garder que les offres plus récentes que le dernier scrap
+                if last_scrap:
+                    try:
+                        last_dt = datetime.fromisoformat(last_scrap)
+                    except Exception:
+                        print(f"[WARN] Format de date du dernier scrap invalide, on ignore le delta.")
+                        last_dt = None
+                    filtered = []
+                    for item in data:
+                        date_str = item.get("date_posted")
+                        if not date_str:
+                            filtered.append(item)  # On garde si pas de date (prudent)
+                            continue
+                        # Normalisation de la date (à adapter selon le format réel)
+                        try:
+                            # Exemples de formats : '2025-06-20', 'Publiée le 20.06.2025', etc.
+                            if "Publiée le" in date_str:
+                                date_str = date_str.replace("Publiée le", "").strip()
+                            date_str = date_str.replace("/", ".").replace("-", ".")
+                            dt = datetime.strptime(date_str, "%d.%m.%Y")
+                        except Exception:
+                            try:
+                                dt = datetime.fromisoformat(date_str)
+                            except Exception:
+                                filtered.append(item)  # Si parsing impossible, on garde
+                                continue
+                        if not last_dt or dt > last_dt:
+                            filtered.append(item)
+                    print(f"[DELTA SCRAP] {len(filtered)} offres à traiter après filtrage delta.")
+                    data = filtered
                 # Extraction des détails pour chaque offre
                 detail_extraction = JsonCssExtractionStrategy(job_detail_extraction_schema)
                 detail_cfg = CrawlerRunConfig(
@@ -242,6 +297,10 @@ async def main():
             writer.writeheader()
             writer.writerows(audit_records)
         print(f"\nRapport d'audit exporté vers {audit_file_path}")
+
+    # Après export de toutes les offres, on met à jour la date du dernier scrap
+    set_last_scrap(datetime.now().isoformat())
+    print(f"[DELTA SCRAP] Date du dernier scrap mise à jour : {datetime.now().isoformat()}")
 
 if __name__ == "__main__":
     asyncio.run(main()) 
