@@ -21,21 +21,40 @@ async def list_items(
     type: Optional[str] = Query(None, description="Type d'item: job, bourse, etc."),
     country: Optional[str] = Query(None, description="Filtrer par pays"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(10, ge=1, le=100)
+    page_size: int = Query(10, ge=1, le=100),
+    max_age_days: int = Query(90, ge=1, le=365, description="Nombre maximum de jours depuis la publication")
 ):
     try:
-        query = supabase.table("items_cache").select("*")
+        base = supabase.table("items_cache")
+        query = base.select("*", count="exact")
         if type:
             query = query.eq("item_type", type)
         if country:
             query = query.eq("item_country", country)
+        # Date non nulle
+        query = query.not_("item_posted_at", "is", "null")
+        # Filtre sur la fraicheur
+        from datetime import datetime, timedelta
+        cutoff = (datetime.utcnow() - timedelta(days=max_age_days)).date().isoformat()
+        query = query.gte("item_posted_at", cutoff)
+        # Tri par date de publication (les plus récentes d'abord)
+        query = query.order("item_posted_at", desc=True, nullsfirst=False)
         # Pagination
         start = (page - 1) * page_size
         end = start + page_size - 1
         query = query.range(start, end)
         res = query.execute()
+        total_records = res.count or len(res.data or [])
         items = res.data or []
-        return items
+        # Format réponse paginée
+        total_pages = (total_records + page_size - 1) // page_size if page_size else 1
+        return {
+            "items": items,
+            "total": total_records,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+        }
     except Exception as e:
         print(f"Erreur dans /items: {e}")
         raise HTTPException(status_code=500, detail=str(e))
