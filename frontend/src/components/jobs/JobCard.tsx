@@ -2,9 +2,12 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { FaMapMarkerAlt, FaClock, FaBriefcase } from 'react-icons/fa';
+import { MapPin, Clock, Briefcase, Building2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 // Interface pour les propriétés de la carte d'offre d'emploi
 export interface JobCardProps {
@@ -36,7 +39,7 @@ const JobCard = ({
   const fallbackSlug = slug || String(id);
   const fallbackJobType = jobType || 'à plein temps';
   const fallbackSalary = salaryRange || 'À négocier';
-  const fallbackSkills = Array.isArray(skills) && skills.length > 0 ? skills : ['Aucune compétence renseignée'];
+  const fallbackSkills = Array.isArray(skills) && skills.length > 0 ? skills.slice(0, 3) : [];
   let formattedDate = 'Date inconnue';
   if (postedDate) {
     try {
@@ -49,74 +52,87 @@ const JobCard = ({
 
   return (
     <Link href={`/job/${fallbackSlug}`} className="block group">
-      <article className="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700/80 rounded-xl p-4 sm:p-6 hover:border-neutral-300 dark:hover:border-neutral-600 hover:shadow-card-hover transition-all duration-300 flex flex-col md:flex-row md:items-start gap-3 sm:gap-5">
-        {/* Logo de l'entreprise */}
-        <div className="relative min-w-[48px] sm:min-w-[56px] w-12 sm:w-14 h-12 sm:h-14 rounded-lg overflow-hidden bg-neutral-100 dark:bg-neutral-700 flex-shrink-0 mt-0.5 sm:mt-1">
+      <Card className={cn(
+        "hover:shadow-lg transition-all duration-300 hover:border-primary/20 group-hover:scale-[1.02]",
+        "backdrop-blur-sm bg-card/80"
+      )}>
+        <CardHeader className="pb-3">
+          <div className="flex items-start gap-3">
+            {/* Logo de l'entreprise - Plus compact */}
+            <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-muted flex-shrink-0 ring-1 ring-border">
           {companyLogo ? (
             <Image 
               src={companyLogo} 
               alt={`${company} logo`} 
               fill 
-              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" 
+                  sizes="40px" 
               className="object-contain"
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center bg-neutral-100 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400 text-xl sm:text-2xl font-medium">
+                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/10 to-primary/5 text-primary font-semibold text-sm">
               {company.charAt(0).toUpperCase()}
             </div>
           )}
         </div>
         
-        {/* Contenu principal */}
-        <div className="flex-1">
-          <h3 className="text-lg sm:text-xl font-semibold text-neutral-800 dark:text-white mb-1 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors duration-200">
+            {/* Titre et entreprise */}
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-base leading-tight text-foreground group-hover:text-primary transition-colors duration-200 truncate">
             {title}
           </h3>
-          <p className="text-sm sm:text-base text-neutral-600 dark:text-neutral-300 mb-2 sm:mb-3">
-            {company}
-          </p>
-          
-          {/* Informations supplémentaires */}
-          <div className="flex flex-wrap items-center gap-x-3 sm:gap-x-5 gap-y-2 text-xs sm:text-sm text-neutral-500 dark:text-neutral-400 mb-3 sm:mb-4">
+              <div className="flex items-center gap-1 mt-1">
+                <Building2 size={12} className="text-muted-foreground flex-shrink-0" />
+                <p className="text-sm text-muted-foreground truncate">{company}</p>
+              </div>
+            </div>
+          </div>
+        </CardHeader>
+        
+        <CardContent className="pt-0 space-y-4">
+          {/* Informations compactes */}
+          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
             {location && (
-              <div className="flex items-center">
-                <FaMapMarkerAlt size={14} className="mr-1 sm:mr-1.5 text-neutral-400 dark:text-neutral-500" />
-                <span>{location}</span>
+              <div className="flex items-center gap-1">
+                <MapPin size={12} className="flex-shrink-0" />
+                <span className="truncate max-w-[120px]">{location}</span>
               </div>
             )}
-              <div className="flex items-center">
-                <FaBriefcase size={14} className="mr-1 sm:mr-1.5 text-neutral-400 dark:text-neutral-500" />
+            <div className="flex items-center gap-1">
+              <Briefcase size={12} className="flex-shrink-0" />
               <span>{fallbackJobType}</span>
               </div>
-            <div className="flex items-center">
-              <FaClock size={14} className="mr-1 sm:mr-1.5 text-neutral-400 dark:text-neutral-500" />
+            <div className="flex items-center gap-1">
+              <Clock size={12} className="flex-shrink-0" />
               <span>{formattedDate}</span>
             </div>
           </div>
 
-          {/* Salaire et Tags des compétences */} 
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
-              <div className="text-xs sm:text-sm font-semibold text-green-600 dark:text-green-400">
-              {fallbackSalary}
-              </div>
-              <div className="flex flex-wrap gap-1.5 sm:gap-2 mt-1 sm:mt-0">
+          {/* Compétences - Plus compactes */}
+          {fallbackSkills.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
               {fallbackSkills.map((skill, index) => (
-                  <span 
-                    key={index} 
-                    className="bg-neutral-100 dark:bg-neutral-700/60 text-neutral-600 dark:text-neutral-300 text-xs font-medium px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full"
-                  >
+                <Badge key={index} variant="secondary" className="text-xs py-0.5 px-2 font-medium">
                     {skill}
-                  </span>
+                </Badge>
                 ))}
               {Array.isArray(skills) && skills.length > 3 && (
-                  <span className="bg-neutral-100 dark:bg-neutral-700/60 text-neutral-500 dark:text-neutral-400 text-xs font-medium px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full">
+                <Badge variant="outline" className="text-xs py-0.5 px-2">
                     +{skills.length - 3}
-                  </span>
+                </Badge>
                 )}
               </div>
+          )}
+
+          {/* Salaire - Plus discret */}
+          {fallbackSalary !== 'À négocier' && (
+            <div className="flex justify-end">
+              <Badge variant="default" className="text-xs font-semibold bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900/20 dark:text-green-400">
+                {fallbackSalary}
+              </Badge>
           </div>
-        </div>
-      </article>
+          )}
+        </CardContent>
+      </Card>
     </Link>
   );
 };

@@ -16,7 +16,7 @@ router = APIRouter(
     tags=["items"],
 )
 
-@router.get("/", response_model=List[ItemCacheResponse])
+@router.get("/")
 async def list_items(
     type: Optional[str] = Query(None, description="Type d'item: job, bourse, etc."),
     country: Optional[str] = Query(None, description="Filtrer par pays"),
@@ -31,14 +31,14 @@ async def list_items(
             query = query.eq("item_type", type)
         if country:
             query = query.eq("item_country", country)
-        # Date non nulle
-        query = query.not_("item_posted_at", "is", "null")
+        # Date non nulle - temporairement désactivé
+        # query = query.neq("item_posted_at", None)
         # Filtre sur la fraicheur
         from datetime import datetime, timedelta
         cutoff = (datetime.utcnow() - timedelta(days=max_age_days)).date().isoformat()
         query = query.gte("item_posted_at", cutoff)
         # Tri par date de publication (les plus récentes d'abord)
-        query = query.order("item_posted_at", desc=True, nullsfirst=False)
+        query = query.order("item_posted_at", desc=True)
         # Pagination
         start = (page - 1) * page_size
         end = start + page_size - 1

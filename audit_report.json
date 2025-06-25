@@ -1,0 +1,12 @@
+{
+  "timestamp": "2025-06-24T18:44:52.948Z",
+  "overallScore": 100,
+  "scores": {
+    "performance": 100,
+    "accessibility": 100,
+    "seo": 100,
+    "bestPractices": 100,
+    "nextjs": 100
+  },
+  "recommendations": []
+}

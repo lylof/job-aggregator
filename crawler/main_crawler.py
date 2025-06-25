@@ -214,8 +214,8 @@ async def main():
                                         print(f"[LLM fallback] Erreur extraction {name}: {e}")
                                 # 4. Si rien trouvé
                                 if name not in final_fields:
-                                    final_fields[name] = None
-                                    extraction_sources[name] = "not_found"
+                                final_fields[name] = None
+                                extraction_sources[name] = "not_found"
 
                             # MAPPING et type conversion
                             mapped = {}
@@ -280,7 +280,7 @@ async def main():
             except Exception as e:
                 print(f"[ERREUR] Décodage JSON principal : {e}")
                 print(f"Contenu extrait : {result.extracted_content[:500]}...\n--- Fin extrait ---")
-        else:
+            else:
             print(f"[ERREUR] Crawl principal échoué.")
             print(f"Message d'erreur : {getattr(result, 'error_message', 'Non spécifié')}")
             print(f"Statut success: {result.success}, extrait: {bool(getattr(result, 'extracted_content', None))}")
