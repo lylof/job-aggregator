@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 const fetcher = async (q: string, page: number) => {
   if (!q) return { items: [], total_pages: 1 };
   // Rechercher avec le système items
-  const itemsRes = await searchItems({ q }, page, 10);
+  const itemsRes = await searchItems(q, page, 10);
     // Mapper les items au format JobOffer
     return {
       ...itemsRes,

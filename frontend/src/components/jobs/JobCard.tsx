@@ -1,139 +1,158 @@
 'use client';
 
+import React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { MapPin, Clock, Briefcase, Building2 } from 'lucide-react';
+import { MapPin, Clock, Briefcase, Building2, Home, GraduationCap, Award, Wifi } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { CategoryBadge } from '@/components/ui/category-badge';
 import { cn } from '@/lib/utils';
+import { JobOffer } from '@/services/api';
 
-// Interface pour les propriétés de la carte d'offre d'emploi
+// Interface pour les propriétés de la carte d'offre d'emploi - ENRICHIE
 export interface JobCardProps {
-  id: string | number;
-  title: string;
-  company: string;
-  companyLogo?: string;
-  location: string;
-  jobType: string;
-  skills: string[];
-  postedDate: string;
-  salaryRange?: string;
-  slug?: string; // Peut être l'item_id si non fourni
+  job: JobOffer;
 }
 
-const JobCard = ({
-  id,
-  title,
-  company,
-  companyLogo,
-  location,
-  jobType,
-  skills,
-  postedDate,
-  salaryRange,
-  slug
-}: JobCardProps) => {
-  // Fallbacks pour les champs critiques
-  const fallbackSlug = slug || String(id);
-  const fallbackJobType = jobType || 'à plein temps';
-  const fallbackSalary = salaryRange || 'À négocier';
-  const fallbackSkills = Array.isArray(skills) && skills.length > 0 ? skills.slice(0, 3) : [];
-  let formattedDate = 'Date inconnue';
-  if (postedDate) {
+export const JobCard: React.FC<JobCardProps> = ({ job }) => {
+  const formatDate = (dateString: string) => {
     try {
-      const dateObj = new Date(postedDate);
-      if (!isNaN(dateObj.getTime())) {
-        formattedDate = formatDistanceToNow(dateObj, { addSuffix: true, locale: fr });
-      }
-    } catch {}
-  }
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffTime = Math.abs(now.getTime() - date.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays === 0) return 'Aujourd\'hui';
+      if (diffDays === 1) return 'Hier';
+      if (diffDays < 7) return `Il y a ${diffDays} jours`;
+      if (diffDays < 30) return `Il y a ${Math.ceil(diffDays / 7)} semaines`;
+      return `Il y a ${Math.ceil(diffDays / 30)} mois`;
+    } catch {
+      return 'Date inconnue';
+    }
+  };
+
+  const getLocationDisplay = () => {
+    // Prioriser la ville détectée, puis la région, puis la localisation de base
+    if (job.detected_city) {
+      return job.detected_region ? `${job.detected_city}, ${job.detected_region}` : job.detected_city;
+    }
+    return job.location || 'Togo';
+  };
+
+  const getSkillsDisplay = () => {
+    if (!job.skills || job.skills.length === 0) return [];
+    return job.skills.slice(0, 3); // Limiter à 3 skills pour l'affichage
+  };
+
+  const truncateDescription = (text: string, maxLength: number = 150) => {
+    if (!text) return '';
+    if (text.length <= maxLength) return text;
+    return text.slice(0, maxLength).trim() + '...';
+  };
 
   return (
-    <Link href={`/job/${fallbackSlug}`} className="block group">
-      <Card className={cn(
-        "hover:shadow-lg transition-all duration-300 hover:border-primary/20 group-hover:scale-[1.02]",
-        "backdrop-blur-sm bg-card/80"
-      )}>
-        <CardHeader className="pb-3">
-          <div className="flex items-start gap-3">
-            {/* Logo de l'entreprise - Plus compact */}
-            <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-muted flex-shrink-0 ring-1 ring-border">
-          {companyLogo ? (
-            <Image 
-              src={companyLogo} 
-              alt={`${company} logo`} 
-              fill 
-                  sizes="40px" 
-              className="object-contain"
-            />
-          ) : (
-                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/10 to-primary/5 text-primary font-semibold text-sm">
-              {company.charAt(0).toUpperCase()}
+    <Card className="h-full flex flex-col hover:shadow-lg transition-shadow duration-200 border-l-4 border-l-blue-500">
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-lg text-gray-900 mb-2 line-clamp-2">
+              <Link 
+                href={`/job/${job.slug || job.id}`}
+                className="hover:text-blue-600 transition-colors"
+              >
+                {job.title}
+              </Link>
+            </h3>
+            
+            <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
+              <Building2 className="h-4 w-4 text-gray-400" />
+              <span className="font-medium">{job.company}</span>
+            </div>
+            
+            <div className="flex items-center gap-4 text-sm text-gray-500">
+              <div className="flex items-center gap-1">
+                <MapPin className="h-4 w-4" />
+                <span>{getLocationDisplay()}</span>
+              </div>
+              
+              {(job.is_remote || job.remote_work_detected) && (
+                <div className="flex items-center gap-1 text-green-600">
+                  <Wifi className="h-4 w-4" />
+                  <span>Remote</span>
+                </div>
+              )}
+              
+              <div className="flex items-center gap-1">
+                <Clock className="h-4 w-4" />
+                <span>{formatDate(job.posted_date)}</span>
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex flex-col gap-2">
+            <CategoryBadge category={job.offer_category || 'job'} />
+            {job.contract_type && job.contract_type !== 'Non spécifié' && (
+              <Badge variant="outline" className="text-xs">
+                {job.contract_type}
+              </Badge>
+            )}
+          </div>
+        </div>
+      </CardHeader>
+
+      <CardContent className="pb-3 flex-1">
+        <p className="text-sm text-gray-600 mb-3">
+          {truncateDescription(job.description)}
+        </p>
+
+        {/* Skills */}
+        {getSkillsDisplay().length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-3">
+            {getSkillsDisplay().map((skill, index) => (
+              <Badge 
+                key={index} 
+                variant="secondary" 
+                className="text-xs bg-blue-50 text-blue-700 hover:bg-blue-100"
+              >
+                {skill}
+              </Badge>
+            ))}
+            {job.skills && job.skills.length > 3 && (
+              <Badge variant="secondary" className="text-xs bg-gray-50 text-gray-600">
+                +{job.skills.length - 3} autres
+              </Badge>
+            )}
+          </div>
+        )}
+
+        {/* Informations additionnelles */}
+        <div className="flex items-center justify-between text-xs text-gray-500">
+          {job.salary && job.salary !== 'À négocier' && (
+            <span className="font-medium text-green-600">{job.salary}</span>
+          )}
+          
+          {job.experience_level && job.experience_level !== 'Non spécifié' && (
+            <div className="flex items-center gap-1">
+              <Briefcase className="h-3 w-3" />
+              <span>{job.experience_level}</span>
             </div>
           )}
         </div>
-        
-            {/* Titre et entreprise */}
-            <div className="flex-1 min-w-0">
-              <h3 className="font-semibold text-base leading-tight text-foreground group-hover:text-primary transition-colors duration-200 truncate">
-            {title}
-          </h3>
-              <div className="flex items-center gap-1 mt-1">
-                <Building2 size={12} className="text-muted-foreground flex-shrink-0" />
-                <p className="text-sm text-muted-foreground truncate">{company}</p>
-              </div>
-            </div>
-          </div>
-        </CardHeader>
-        
-        <CardContent className="pt-0 space-y-4">
-          {/* Informations compactes */}
-          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-            {location && (
-              <div className="flex items-center gap-1">
-                <MapPin size={12} className="flex-shrink-0" />
-                <span className="truncate max-w-[120px]">{location}</span>
-              </div>
-            )}
-            <div className="flex items-center gap-1">
-              <Briefcase size={12} className="flex-shrink-0" />
-              <span>{fallbackJobType}</span>
-              </div>
-            <div className="flex items-center gap-1">
-              <Clock size={12} className="flex-shrink-0" />
-              <span>{formattedDate}</span>
-            </div>
-          </div>
+      </CardContent>
 
-          {/* Compétences - Plus compactes */}
-          {fallbackSkills.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {fallbackSkills.map((skill, index) => (
-                <Badge key={index} variant="secondary" className="text-xs py-0.5 px-2 font-medium">
-                    {skill}
-                </Badge>
-                ))}
-              {Array.isArray(skills) && skills.length > 3 && (
-                <Badge variant="outline" className="text-xs py-0.5 px-2">
-                    +{skills.length - 3}
-                </Badge>
-                )}
-              </div>
-          )}
-
-          {/* Salaire - Plus discret */}
-          {fallbackSalary !== 'À négocier' && (
-            <div className="flex justify-end">
-              <Badge variant="default" className="text-xs font-semibold bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900/20 dark:text-green-400">
-                {fallbackSalary}
-              </Badge>
-          </div>
-          )}
-        </CardContent>
-      </Card>
-    </Link>
+      <CardFooter className="pt-3">
+        <Link 
+          href={`/job/${job.slug || job.id}`}
+          className="w-full bg-blue-600 text-white py-2 px-4 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors text-center"
+        >
+          Voir l'offre
+        </Link>
+      </CardFooter>
+    </Card>
   );
 };
 

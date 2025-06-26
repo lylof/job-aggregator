@@ -40,29 +40,29 @@ const Header = () => {
               </linearGradient>
             </defs>
           </svg>
-        </Link>
+          </Link>
 
         {/* Navigation */}
         <nav className="flex items-center space-x-6 text-sm font-medium flex-1">
-          <Link 
-            href="/" 
+            <Link 
+              href="/" 
             className="text-foreground/60 transition-colors hover:text-foreground/80"
-          >
-            Accueil
-          </Link>
-          <Link 
+            >
+              Accueil
+            </Link>
+            <Link 
             href="/search" 
             className="text-foreground/60 transition-colors hover:text-foreground/80"
           >
             Rechercher
-          </Link>
-          <Link 
-            href="/about" 
+            </Link>
+            <Link 
+              href="/about" 
             className="text-foreground/60 transition-colors hover:text-foreground/80"
-          >
-            À propos
-          </Link>
-        </nav>
+            >
+              À propos
+            </Link>
+          </nav>
 
         {/* Boutons d'action */}
         <div className="flex items-center space-x-3">

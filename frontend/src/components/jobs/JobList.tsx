@@ -116,11 +116,30 @@ const JobList = ({ filters }: JobListProps) => {
         </Button>
       </div>
 
-      {/* Grille des offres d'emploi */}
+      {/* Grille des offres d'emploi - ENRICHIE */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {data.items.map((job: any) => (
           <div key={job.id} className="animate-fade-in">
-            <JobCard {...job} />
+            <JobCard 
+              id={job.id}
+              title={job.title}
+              company={job.company}
+              companyLogo={job.company_logo_url}
+              location={job.location}
+              jobType={job.job_type}
+              skills={job.skills || []}
+              postedDate={job.posted_date}
+              salaryRange={job.salary}
+              slug={job.slug}
+              // Nouvelles données enrichies
+              sector={job.sector}
+              education_level={job.education_level}
+              experience_level={job.experience_level}
+              contract_type={job.contract_type}
+              is_remote={job.is_remote}
+              number_of_positions={job.number_of_positions}
+              company_website={job.company_website}
+            />
           </div>
         ))}
       </div>

@@ -196,26 +196,30 @@ async def main():
                                         extraction_sources[name] = "heuristic"
                                         continue
 
-                                # 3. LLM fallback si activé
-                                if ENRICH_LLM and GEMINI_API_KEY:
-                                    try:
-                                        # On ne complète que si la valeur est absente
-                                        if final_fields.get(name) in [None, "", [], {}]: # Utilise final_fields ici
-                                            html_fallback = parent_html or getattr(detail_result, 'cleaned_html', '') or getattr(detail_result, 'markdown', '')
-                                            prompt = f"Dans ce HTML, quelle est la valeur exacte du champ '{name}' ? Donne uniquement la valeur brute, rien d'autre.\nHTML:\n{html_fallback}"
-                                            enriched = enricher.enrich({name: None, "html": html_fallback})
-                                        llm_val = enriched.get(name)
-                                        if llm_val not in [None, "", [], {}]:
-                                            final_fields[name] = llm_val
-                                            extraction_sources[name] = "llm"
-                                            print(f"[LLM enrich] Champ complété : {name} => {llm_val}")
-                                            continue
-                                    except Exception as e:
-                                        print(f"[LLM fallback] Erreur extraction {name}: {e}")
                                 # 4. Si rien trouvé
                                 if name not in final_fields:
-                                final_fields[name] = None
-                                extraction_sources[name] = "not_found"
+                                    final_fields[name] = None
+                                    extraction_sources[name] = "not_found"
+                            
+                            # 3. LLM enrichment sur l'offre entière (après la boucle des champs)
+                            if ENRICH_LLM and GEMINI_API_KEY:
+                                try:
+                                    print("[LLM] Enrichissement de l'offre complète...")
+                                    # Préparer les données pour l'enrichissement
+                                    offer_data = {**merged, **final_fields}
+                                    enriched_offer = enricher.enrich(offer_data)
+                                    
+                                    # Mettre à jour les champs enrichis
+                                    for name in final_fields.keys():
+                                        if final_fields[name] in [None, "", [], {}]:  # Si champ vide
+                                            enriched_val = enriched_offer.get(name)
+                                            if enriched_val not in [None, "", [], {}]:  # Si LLM a trouvé quelque chose
+                                                final_fields[name] = enriched_val
+                                                extraction_sources[name] = "llm"
+                                                print(f"[LLM] Champ enrichi : {name} => {enriched_val}")
+                                    
+                                except Exception as e:
+                                    print(f"[LLM] Erreur enrichissement : {e}")
 
                             # MAPPING et type conversion
                             mapped = {}
@@ -280,7 +284,7 @@ async def main():
             except Exception as e:
                 print(f"[ERREUR] Décodage JSON principal : {e}")
                 print(f"Contenu extrait : {result.extracted_content[:500]}...\n--- Fin extrait ---")
-            else:
+        else:
             print(f"[ERREUR] Crawl principal échoué.")
             print(f"Message d'erreur : {getattr(result, 'error_message', 'Non spécifié')}")
             print(f"Statut success: {result.success}, extrait: {bool(getattr(result, 'extracted_content', None))}")

@@ -3,6 +3,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 class ItemCacheBase(BaseModel):
+    # =============== CHAMPS EXISTANTS (Compatibilité) ===============
     item_id: str
     item_provider: str
     item_type: str = 'job'  # 'job', 'bourse', etc.
@@ -26,10 +27,40 @@ class ItemCacheBase(BaseModel):
     raw_data: Dict[str, Any]
     sync_batch_id: Optional[str] = None
     is_active: Optional[bool] = True
-    # Champs d'enrichissement (optionnels)
     job_detailed: Optional[bool] = None
     details_fetched_at: Optional[datetime] = None
     job_full_data: Optional[Dict[str, Any]] = None
 
+    # =============== NOUVEAUX CHAMPS ENRICHIS (Données LLM) ===============
+    # Informations entreprise enrichies
+    company_logo_url: Optional[str] = None
+    company_website: Optional[str] = None  
+    company_description: Optional[str] = None
+    
+    # Compétences et qualifications
+    skills: Optional[List[str]] = None
+    education_level: Optional[str] = None
+    experience_level: Optional[str] = None
+    languages: Optional[List[str]] = None
+    
+    # Informations contractuelles
+    salary: Optional[str] = None
+    number_of_positions: Optional[int] = None
+    contract_type: Optional[str] = None  # Alias de item_employment_type pour cohérence
+    
+    # Classification métier
+    sector: Optional[str] = None
+    job_type: Optional[str] = None
+    tags: Optional[List[str]] = None
+    
+    # Contact et candidature
+    application_url: Optional[str] = None
+    contact_email: Optional[str] = None
+    other_benefits: Optional[str] = None
+    
+    # Profil recherché (texte enrichi)
+    profile_required: Optional[str] = None
+
 class ItemCacheResponse(ItemCacheBase):
+    """Modèle de réponse API avec tous les champs enrichis disponibles"""
     pass 

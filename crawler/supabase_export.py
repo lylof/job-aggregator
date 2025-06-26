@@ -44,10 +44,12 @@ ITEMS_CACHE_FIELDS = {
     'item_is_remote', 'item_city', 'item_state', 'item_country', 'item_latitude', 'item_longitude',
     'item_description', 'item_highlights', 'raw_data', 'sync_batch_id', 'is_active',
     'job_detailed', 'details_fetched_at', 'job_full_data',
-    # champs ajoutés
+    # champs enrichis LLM
     'company_logo_url', 'company_website', 'company_description',
     'skills', 'salary', 'languages', 'sector', 'education_level', 'experience_level',
-    'number_of_positions', 'tags', 'contact_email', 'other_benefits', 'application_url'
+    'number_of_positions', 'tags', 'contact_email', 'other_benefits', 'application_url',
+    # classification automatique et géolocalisation Phase 2
+    'offer_category', 'detected_city', 'detected_region', 'detected_latitude', 'detected_longitude', 'remote_work_detected'
 }
 
 def map_job_offer_to_items_cache(job: Dict[str, Any]) -> Dict[str, Any]:
@@ -61,6 +63,7 @@ def map_job_offer_to_items_cache(job: Dict[str, Any]) -> Dict[str, Any]:
     FIELD_MAP = {
         # Principaux champs existants
         "title": "item_title",
+        "company_name": "company_name",
         "job_description": "item_description",
         "location": "item_city",
         "remote_possible": "item_is_remote",
@@ -68,7 +71,7 @@ def map_job_offer_to_items_cache(job: Dict[str, Any]) -> Dict[str, Any]:
         "valid_through": "item_expires_at",
         "contract_type": "item_employment_type",
         "job_type": "item_employment_type",
-        # Champs supplémentaires explicités
+        # Champs enrichis LLM
         "company_logo_url": "company_logo_url",
         "company_website": "company_website",
         "company_description": "company_description",
@@ -83,6 +86,13 @@ def map_job_offer_to_items_cache(job: Dict[str, Any]) -> Dict[str, Any]:
         "contact_email": "contact_email",
         "other_benefits": "other_benefits",
         "application_url": "application_url",
+        # Classification automatique et géolocalisation Phase 2
+        "offer_category": "offer_category",
+        "detected_city": "detected_city",
+        "detected_region": "detected_region", 
+        "detected_latitude": "detected_latitude",
+        "detected_longitude": "detected_longitude",
+        "remote_work_detected": "remote_work_detected"
     }
 
     for k, v in job.items():

@@ -106,34 +106,34 @@ const Footer = () => {
             
             <div className="flex space-x-2 mb-6">
               <Button variant="ghost" size="icon" className="w-9 h-9" asChild>
-                <a 
-                  href="https://github.com" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  aria-label="GitHub"
-                >
+              <a 
+                href="https://github.com" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                aria-label="GitHub"
+              >
                   <Github className="w-4 h-4" />
-                </a>
+              </a>
               </Button>
               <Button variant="ghost" size="icon" className="w-9 h-9" asChild>
-                <a 
-                  href="https://twitter.com" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  aria-label="Twitter"
-                >
+              <a 
+                href="https://twitter.com" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                aria-label="Twitter"
+              >
                   <Twitter className="w-4 h-4" />
-                </a>
+              </a>
               </Button>
               <Button variant="ghost" size="icon" className="w-9 h-9" asChild>
-                <a 
-                  href="https://linkedin.com" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  aria-label="LinkedIn"
-                >
+              <a 
+                href="https://linkedin.com" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                aria-label="LinkedIn"
+              >
                   <Linkedin className="w-4 h-4" />
-                </a>
+              </a>
               </Button>
             </div>
             

@@ -1,51 +1,36 @@
 {
   "emploi_tg": {
-    "seen_ids": [
-      "https://www.emploi.tg/offre-emploi-togo/commis-pieces-vancouver-canada-313000",
-      "https://www.emploi.tg/offre-emploi-togo/stagaire-psychologue-clinicienne-lome-319572",
-      "https://www.emploi.tg/offre-emploi-togo/stagiaire-assistante-administrative-comptable-lome-316243",
-      "https://www.emploi.tg/offre-emploi-togo/developpeur-python-odoo-lome-319609",
-      "https://www.emploi.tg/offre-emploi-togo/stagiaire-graphiste-hf-lome-319564",
-      "https://www.emploi.tg/offre-emploi-togo/developpeur-devops-hf-lome-320350",
-      "https://www.emploi.tg/offre-emploi-togo/agent-commercial-terrain-hf-lome-319845",
-      "https://www.emploi.tg/offre-emploi-togo/consultant-lome-320021",
-      "https://www.emploi.tg/offre-emploi-togo/agent-commercial-passionne-vente-lome-317904",
-      "https://www.emploi.tg/offre-emploi-togo/graphiste-senior-hf-lome-319561",
-      "https://www.emploi.tg/offre-emploi-togo/cuisiniere-agoe-anome-316554",
-      "https://www.emploi.tg/offre-emploi-togo/chargee-commerciale-lome-togo-317956",
-      "https://www.emploi.tg/offre-emploi-togo/commercial-lome-319803",
-      "https://www.emploi.tg/offre-emploi-togo/vendeur-motorise-lome-319703",
-      "https://www.emploi.tg/offre-emploi-togo/ouvrier-agricole-fh-vancouver-canada-324349",
-      "https://www.emploi.tg/offre-emploi-togo/receptionniste-vancouver-canada-324348",
-      "https://www.emploi.tg/offre-emploi-togo/chauffeureuse-livreureuse-vancouver-canada-316766",
-      "https://www.emploi.tg/offre-emploi-togo/couturierscouturieres-hf-specialisation-vetements-homme-femme-lome-318838",
-      "https://www.emploi.tg/offre-emploi-togo/international-recruiter-freelancer-mf-312227",
-      "https://www.emploi.tg/offre-emploi-togo/commercial-lome-319788",
-      "https://www.emploi.tg/offre-emploi-togo/developpeur-back-end-hf-lome-320352",
-      "https://www.emploi.tg/offre-emploi-togo/assistante-hygiene-securite-environnement-hse-lome-277085",
-      "https://www.emploi.tg/offre-emploi-togo/commercial-lome-319644",
-      "https://www.emploi.tg/offre-emploi-togo/community-manager-secteur-financier-montreal-canada-316482",
-      "https://www.emploi.tg/offre-emploi-togo/gardienenne-troupeau-laitier-vancouver-canada-316767"
-    ],
-    "last_run_utc": "2025-06-23T23:57:04.075500"
+    "seen_ids": [],
+    "last_run_utc": "2025-06-25T20:31:31.600488"
   },
   "emploitogo_info": {
     "seen_ids": [
-      "https://www.emploitogo.info/le-cabinet-acrm-africa-recrute-03-07-2025/",
-      "https://www.emploitogo.info/une-institution-de-microfinance-de-la-place-recrute-27-06-2025/",
-      "https://www.emploitogo.info/le-cabinet-lucreatif-recrute-30-06-2025-05-postes/",
-      "https://www.emploitogo.info/le-cabinet-eurafrique-conseil-recrute-30-06-2025/",
-      "https://www.emploitogo.info/appel-a-candidatures-doctorat-en-developpement-urbain-durable-de-luniversite-de-lome-2025-2028/",
-      "https://www.emploitogo.info/sitelso-sarl-recrute/",
-      "https://www.emploitogo.info/jobs-de-vacances/",
       "https://www.emploitogo.info/sunu-assurances-vie-togo-recrute-27-06-2025/",
-      "https://www.emploitogo.info/une-clinique-de-la-place-recrute-07-07-2025-02-postes/",
-      "https://www.emploitogo.info/lagence-nationale-pour-lemploi-anpe-recrute-02-07-2025/",
+      "https://www.emploitogo.info/le-cabinet-acrm-africa-recrute-03-07-2025/",
       "https://www.emploitogo.info/la-bad-banque-africaine-de-developpement-recrute/",
-      "https://www.emploitogo.info/le-groupe-eddap-recrute/",
+      "https://www.emploitogo.info/le-cabinet-lucreatif-recrute-30-06-2025-05-postes/",
+      "https://www.emploitogo.info/un-institut-de-beaute-recrute-15-07-2025-plusieurs-postes/",
+      "https://www.emploitogo.info/lagence-nationale-pour-lemploi-anpe-recrute-02-07-2025/",
+      "https://www.emploitogo.info/professeur-dallemand/",
+      "https://www.emploitogo.info/le-cabinet-eurafrique-conseil-recrute-30-06-2025/",
+      "https://www.emploitogo.info/un-responsable-marketing-et-communication-01-07-2025/",
+      "https://www.emploitogo.info/sitelso-sarl-recrute/",
       "https://www.emploitogo.info/le-cabinet-talents-plus-conseils-benin-recrute-22-06-2025-2/",
-      "https://www.emploitogo.info/moov-africa-togo-recrute-30-06-2025-25-postes/"
+      "https://www.emploitogo.info/moov-africa-togo-recrute-30-06-2025-25-postes/",
+      "https://www.emploitogo.info/lutheran-world-relief-lwr-is-recruiting-a-consultant/",
+      "https://www.emploitogo.info/edufia-recrute-05-07-2025/",
+      "https://www.emploitogo.info/assistant-financier-et-comptable-h-f-30-06-2025/",
+      "https://www.emploitogo.info/une-institution-de-microfinance-de-la-place-recrute-27-06-2025/",
+      "https://www.emploitogo.info/le-cabinet-cosit-togo-sarl-recrute-un-directeur-technique-dt/",
+      "https://www.emploitogo.info/televendeurs-30-06-2025/",
+      "https://www.emploitogo.info/une-entreprise-de-la-place-recrute-08-07-2025/",
+      "https://www.emploitogo.info/une-clinique-de-la-place-recrute-07-07-2025-02-postes/",
+      "https://www.emploitogo.info/appel-a-candidatures-doctorat-en-developpement-urbain-durable-de-luniversite-de-lome-2025-2028/",
+      "https://www.emploitogo.info/jobs-de-vacances/",
+      "https://www.emploitogo.info/centralresource-recrute-une-chef-fe-de-projet-technique-senior/",
+      "https://www.emploitogo.info/le-groupe-eddap-recrute/",
+      "https://www.emploitogo.info/lentreprise-queen-ice-recrute-04-07-2025/"
     ],
-    "last_run_utc": "2025-06-23T23:57:07.927887"
+    "last_run_utc": "2025-06-25T20:31:34.096384"
   }
 }

@@ -17,11 +17,11 @@ const JobDetail = ({ job }: JobDetailProps) => {
   
   // Fallbacks pour les champs critiques
   const fallbackJobType = job.job_type || 'à plein temps';
-  const fallbackSalary = job.salary_range || 'À négocier';
+  const fallbackSalary = job.salary || 'À négocier';
   const fallbackDescription = job.description || 'Non renseigné';
   const fallbackSkills = Array.isArray(job.skills) && job.skills.length > 0 ? job.skills : ['Aucune compétence renseignée'];
   let formattedDate = 'Date inconnue';
-  const dateStr = job.date_posted_local || job.posted_date;
+  const dateStr = job.posted_date;
   if (dateStr) {
     try {
       const dateObj = new Date(dateStr);
@@ -63,18 +63,9 @@ const JobDetail = ({ job }: JobDetailProps) => {
         <div className="flex flex-col md:flex-row gap-6">
           {/* Logo de l'entreprise */}
           <div className="relative min-w-[80px] w-20 h-20 rounded-md overflow-hidden bg-gray-100 flex-shrink-0">
-            {job.company_logo ? (
-              <Image 
-                src={job.company_logo} 
-                alt={`${job.company} logo`} 
-                fill 
-                className="object-cover"
-              />
-            ) : (
               <div className="w-full h-full flex items-center justify-center bg-primary-100 text-primary-600 text-2xl font-bold">
                 {job.company.charAt(0)}
               </div>
-            )}
           </div>
           
           {/* Informations principales */}

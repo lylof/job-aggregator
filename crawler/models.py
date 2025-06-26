@@ -27,6 +27,14 @@ class JobOffer(BaseModel):
     tags: Optional[List[str]] = Field(None, description="Mots-clés additionnels")
     contact_email: Optional[str] = Field(None, description="Email de contact")
     other_benefits: Optional[str] = Field(None, description="Avantages divers")
+    
+    # ==================== NOUVEAUX CHAMPS PHASE 2 ====================
+    offer_category: Optional[str] = Field(None, description="Catégorie automatique: job, internship, scholarship, training, volunteer")
+    detected_city: Optional[str] = Field(None, description="Ville détectée automatiquement")
+    detected_region: Optional[str] = Field(None, description="Région détectée automatiquement")
+    detected_latitude: Optional[float] = Field(None, description="Latitude de la ville détectée")
+    detected_longitude: Optional[float] = Field(None, description="Longitude de la ville détectée")
+    remote_work_detected: Optional[bool] = Field(None, description="Télétravail détecté automatiquement")
 
     # -------------------- VALIDATORS --------------------
     @field_validator('skills', 'languages', 'tags', mode='before')

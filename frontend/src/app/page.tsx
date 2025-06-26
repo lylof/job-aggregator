@@ -1,10 +1,12 @@
-import { Suspense } from 'react';
+﻿import { Suspense } from 'react';
 import { Metadata } from 'next';
-import { MapPin } from 'lucide-react';
-import SearchBar from '@/components/filters/SearchBar';
+import { MapPin, Search } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import JobListContainer from '@/components/jobs/JobListContainer';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { getItems } from '@/services/api';
 
 // Métadonnées optimisées pour le SEO
 export const metadata: Metadata = {
@@ -26,61 +28,64 @@ export const metadata: Metadata = {
   },
 };
 
-// Récupération des jobs en vedette côté serveur
+// Fonction utilitaire pour calculer le temps écoulé
+const getTimeAgo = (dateString: string): string => {
+  try {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return 'aujourd\'hui';
+    if (diffDays === 1) return '1 jour';
+    if (diffDays < 7) return `${diffDays} jours`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} semaine${Math.floor(diffDays / 7) > 1 ? 's' : ''}`;
+    return `${Math.floor(diffDays / 30)} mois`;
+  } catch {
+    return 'récemment';
+  }
+};
+
+// Fonction pour nettoyer la description HTML
+const cleanDescription = (htmlString: string): string => {
+  if (!htmlString) return '';
+  // Supprimer les balises HTML et limiter la longueur
+  const textOnly = htmlString.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  return textOnly.length > 120 ? textOnly.substring(0, 120) + '...' : textOnly;
+};
+
+// Récupération des jobs en vedette côté serveur - MAINTENANT AVEC L'API RÉELLE
 const getFeaturedJobs = async () => {
   try {
-    // Remplacer par un appel API réel plus tard - adaptés au contexte togolais
-    const featured = [
-      { 
-        id: '1',
-        title: 'Développeur Full-Stack', 
-        company: 'TechStart Lomé', 
-        location: 'Lomé, Maritime', 
-        type: 'CDI',
-        postedDate: '2 jours',
-        description: 'Rejoignez notre équipe dynamique pour développer des applications web modernes...'
-      },
-      { 
-        id: '2',
-        title: 'Chef de Projet Marketing', 
-        company: 'Digital Togo', 
-        location: 'Lomé, Maritime', 
-        type: 'CDI',
-        postedDate: '1 jour',
-        description: 'Pilotez nos campagnes marketing digitales et développez notre présence en ligne...'
-      },
-      { 
-        id: '3',
-        title: 'Comptable Senior', 
-        company: 'Cabinet Expertise', 
-        location: 'Kpalimé, Plateaux', 
-        type: 'CDI',
-        postedDate: '3 jours',
-        description: 'Prenez en charge la comptabilité de nos clients et participez aux missions d\'audit...'
-      },
-      { 
-        id: '4',
-        title: 'Designer UX/UI', 
-        company: 'Creative Studio', 
-        location: 'Lomé, Maritime', 
-        type: 'CDI',
-        postedDate: '1 jour',
-        description: 'Créez des expériences utilisateur exceptionnelles pour nos clients...'
-      },
-      { 
-        id: '5',
-        title: 'Responsable Commercial', 
-        company: 'Business Solutions', 
-        location: 'Sokodé, Centrale', 
-        type: 'CDI',
-        postedDate: '4 jours',
-        description: 'Développez notre portefeuille client et atteignez les objectifs de vente...'
-      },
-    ];
+    // Appel à l'API réelle pour récupérer les offres d'emploi
+    const apiResponse = await getItems(1, 8); // Récupérer 8 offres récentes
+    
+    // Mapper les données de l'API vers le format attendu par l'interface
+    const featured = apiResponse.items.map((item) => ({
+      id: item.id,
+      title: item.title || 'Poste à pourvoir',
+      company: item.company || 'Entreprise',
+      location: item.location || 'Togo',
+      type: item.contract_type || 'CDI',
+      postedDate: getTimeAgo(item.posted_date),
+      description: cleanDescription(item.description),
+    }));
+    
     return featured;
   } catch (error) {
     console.error('Erreur lors de la récupération des jobs en vedette:', error);
-    return [];
+    // Fallback en cas d'erreur - quelques offres par défaut
+    return [
+      { 
+        id: 'fallback-1',
+        title: 'Chargement des offres...', 
+        company: 'Veuillez rafraîchir', 
+        location: 'Togo', 
+        type: 'CDI',
+        postedDate: 'récemment',
+        description: 'Connexion à la base de données en cours...'
+      }
+    ];
   }
 };
 
@@ -108,9 +113,40 @@ export default async function HomePage() {
         </p>
       </div>
       
-            {/* Barre de recherche centrale */}
-            <div className="max-w-2xl mx-auto">
-              <SearchBar placeholder="Rechercher des offres d'emploi..." />
+            {/* Barre de recherche centrale en forme de pilule */}
+            <div className="max-w-3xl mx-auto">
+              <form className="w-full">
+                <div className="relative group">
+                  {/* Effet de glow subtil */}
+                  <div className="absolute -inset-0.5 bg-gradient-to-r from-primary/20 to-primary/10 rounded-full blur opacity-30 group-focus-within:opacity-60 transition-opacity duration-300"></div>
+                  
+                  {/* Container principal avec forme de pilule */}
+                  <div className="relative bg-background/90 backdrop-blur-md border border-border/40 rounded-full shadow-xl group-focus-within:shadow-2xl group-focus-within:border-primary/50 transition-all duration-300">
+                    
+                    {/* Icône de recherche */}
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-6 pointer-events-none">
+                      <Search className="w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-colors duration-200" />
+      </div>
+      
+                    {/* Input de recherche */}
+                    <Input
+                      type="search"
+                      placeholder="Rechercher des offres d'emploi au Togo..."
+                      className="pl-14 pr-36 h-16 text-lg bg-transparent border-none focus:ring-0 focus:outline-none placeholder:text-muted-foreground/70 rounded-full font-medium"
+                      aria-label="Recherche d'emploi"
+                    />
+                    
+                    {/* Bouton de recherche */}
+                    <Button
+                      type="submit"
+                      size="lg"
+                      className="absolute right-2 top-2 h-12 px-8 bg-primary hover:bg-primary/90 text-primary-foreground rounded-full shadow-lg hover:shadow-xl transition-all duration-200 font-semibold text-base"
+                    >
+                      Rechercher
+                    </Button>
+                  </div>
+                </div>
+              </form>
             </div>
           </div>
         </div>
@@ -120,7 +156,7 @@ export default async function HomePage() {
       <section className="py-8">
         <div className="container-custom">
           {/* Titre de section */}
-      <div className="mb-6">
+          <div className="mb-6">
             <h2 className="text-xl font-semibold text-foreground mb-1">
               Offres récentes
             </h2>
@@ -157,8 +193,8 @@ export default async function HomePage() {
                         <span>{job.location}</span>
                       </div>
                       <span>Publié il y a {job.postedDate}</span>
-      </div>
-      
+                    </div>
+                    
                     <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
                       {job.description}
                     </p>

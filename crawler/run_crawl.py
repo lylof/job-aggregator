@@ -2,6 +2,13 @@ import asyncio
 import importlib
 import pkgutil
 import os
+import sys
+
+# Ajouter le dossier parent au path pour les imports
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
 from crawler.core.engine import SourceRunner
 
 # Découverte dynamique des plugins sources
@@ -24,6 +31,7 @@ def discover_sources():
 
 async def main():
     sources = discover_sources()
+    print(f"[INFO] Sources découvertes: {[type(s).__name__ for s in sources]}")
     runners = [SourceRunner(source) for source in sources]
     await asyncio.gather(*(runner.crawl() for runner in runners))
 

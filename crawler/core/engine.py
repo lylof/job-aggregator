@@ -50,12 +50,26 @@ class SourceRunner:
         # Réduire le bruit des messages "Error while closing connector"
         logging.getLogger("aiohttp.client").setLevel(logging.CRITICAL)
         from crawler.supabase_export import upsert_job_to_supabase
+        from crawler.utils.html_cleaner import clean_html_content
+        from crawler.utils.job_classifier import JobClassifier
+        from crawler.utils.geo_extractor import GeoExtractor
         from datetime import datetime
         try:
             from crawler.llm_enrichment import GeminiEnricher
-            enricher = GeminiEnricher()
-        except Exception:
+            GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+            # Désactiver l'enrichissement LLM pour les clés de test
+            if GEMINI_API_KEY and GEMINI_API_KEY not in ["DEMO_MODE_PLACEHOLDER", "your_gemini_api_key_here"]:
+                enricher = GeminiEnricher(api_key=GEMINI_API_KEY)
+                print(f"[LLM] Enrichissement activé avec Gemini")
+            else:
+                enricher = None
+                if GEMINI_API_KEY in ["DEMO_MODE_PLACEHOLDER", "your_gemini_api_key_here"]:
+                    print(f"[LLM] Enrichissement désactivé - clé API de test détectée")
+                else:
+                    print(f"[LLM] Enrichissement désactivé - pas de GEMINI_API_KEY")
+        except Exception as e:
             enricher = None
+            print(f"[LLM] Erreur initialisation enrichissement : {e}")
 
         from datetime import timedelta
         max_age_days = int(os.getenv("MAX_JOB_AGE_DAYS", "7"))  # défaut 7 jours
@@ -70,6 +84,12 @@ class SourceRunner:
         exported = 0
         errors = 0
         pages = 0
+        
+        # Initialiser le classificateur
+        classifier = JobClassifier()
+        
+        # Initialiser l'extracteur géographique
+        geo_extractor = GeoExtractor()
         session_timeout = aiohttp.ClientTimeout(total=60)
         async with aiohttp.ClientSession(timeout=session_timeout) as session:
             for start_url in self.source.get_listing_urls():
@@ -155,7 +175,12 @@ class SourceRunner:
                                 if field["type"] == "attribute":
                                     offer[field["name"]] = sel.get(field["attribute"])
                                 elif field["type"] == "html":
-                                    offer[field["name"]] = str(sel)
+                                    raw_html = str(sel)
+                                    # Nettoyer le HTML pour les champs de description
+                                    if field["name"] in ["job_description", "profile_required", "description"]:
+                                        offer[field["name"]] = clean_html_content(raw_html)
+                                    else:
+                                        offer[field["name"]] = raw_html
                                 elif field["type"] == "text-list":
                                     offer[field["name"]] = [s.get_text(strip=True) for s in detail_soup.select(selector)]
                                 elif field["type"] == "keyword":
@@ -192,6 +217,28 @@ class SourceRunner:
                             if not recent_enough:
                                 continue  # ignore export et ne marque pas comme nouvelle
                             page_has_recent = True
+                            # --- Classification automatique ---
+                            offer_category = classifier.classify_offer(
+                                offer.get('title', ''),
+                                offer.get('job_description', ''),
+                                offer.get('company_name', '')
+                            )
+                            offer['offer_category'] = offer_category
+                            
+                            # --- Extraction géographique ---
+                            geo_text = f"{offer.get('title', '')} {offer.get('job_description', '')} {offer.get('location', '')}"
+                            geo_info = geo_extractor.extract_location_info(geo_text)
+                            
+                            # Ajouter les informations géographiques aux données de l'offre
+                            if geo_info.get('city'):
+                                offer['detected_city'] = geo_info['city']
+                                offer['detected_region'] = geo_info['region']
+                                offer['detected_latitude'] = geo_info['latitude']
+                                offer['detected_longitude'] = geo_info['longitude']
+                            
+                            if geo_info.get('is_remote'):
+                                offer['remote_work_detected'] = True
+                            
                             # --- Enrichissement LLM (optionnel) ---
                             if enricher:
                                 offer = enricher.enrich(offer)

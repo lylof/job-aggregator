@@ -160,7 +160,7 @@ const FilterPanelSimple = ({ filters, onApplyFilters, onResetFilters }: FilterPa
             <Label className="text-xs font-medium text-muted-foreground">Actifs</Label>
             <div className="flex flex-wrap gap-1">
               {Object.entries(localFilters).map(([category, values]) =>
-                values.slice(0, 2).map(value => ( // Limite à 2 badges visibles
+                values.slice(0, 2).map((value: string) => ( // Limite à 2 badges visibles
                   <Badge 
                     key={`${category}-${value}`}
                     variant="secondary"
