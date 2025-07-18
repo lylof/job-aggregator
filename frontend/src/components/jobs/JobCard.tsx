@@ -56,9 +56,9 @@ export const JobCard: React.FC<JobCardProps> = ({ job }) => {
 
   return (
     <Card className="h-full flex flex-col hover:shadow-lg transition-shadow duration-200 border-l-4 border-l-blue-500">
-      <CardHeader className="pb-3">
+        <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-lg text-gray-900 mb-2 line-clamp-2">
               <Link 
                 href={`/job/${job.slug || job.id}`}
@@ -66,7 +66,7 @@ export const JobCard: React.FC<JobCardProps> = ({ job }) => {
               >
                 {job.title}
               </Link>
-            </h3>
+          </h3>
             
             <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
               <Building2 className="h-4 w-4 text-gray-400" />
@@ -89,7 +89,7 @@ export const JobCard: React.FC<JobCardProps> = ({ job }) => {
               <div className="flex items-center gap-1">
                 <Clock className="h-4 w-4" />
                 <span>{formatDate(job.posted_date)}</span>
-              </div>
+                </div>
             </div>
           </div>
           
@@ -118,16 +118,16 @@ export const JobCard: React.FC<JobCardProps> = ({ job }) => {
                 variant="secondary" 
                 className="text-xs bg-blue-50 text-blue-700 hover:bg-blue-100"
               >
-                {skill}
-              </Badge>
-            ))}
+                    {skill}
+                </Badge>
+                ))}
             {job.skills && job.skills.length > 3 && (
               <Badge variant="secondary" className="text-xs bg-gray-50 text-gray-600">
                 +{job.skills.length - 3} autres
-              </Badge>
-            )}
-          </div>
-        )}
+                </Badge>
+                )}
+              </div>
+          )}
 
         {/* Informations additionnelles */}
         <div className="flex items-center justify-between text-xs text-gray-500">
@@ -139,10 +139,10 @@ export const JobCard: React.FC<JobCardProps> = ({ job }) => {
             <div className="flex items-center gap-1">
               <Briefcase className="h-3 w-3" />
               <span>{job.experience_level}</span>
-            </div>
+          </div>
           )}
         </div>
-      </CardContent>
+        </CardContent>
 
       <CardFooter className="pt-3">
         <Link 
@@ -152,7 +152,7 @@ export const JobCard: React.FC<JobCardProps> = ({ job }) => {
           Voir l'offre
         </Link>
       </CardFooter>
-    </Card>
+      </Card>
   );
 };
 

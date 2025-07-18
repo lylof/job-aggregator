@@ -115,6 +115,10 @@ class GeminiEnricher(LLMEnricher):
             print(f"[LLM enrich] Champs modifiés : {diff}")
         else:
             print("[LLM enrich] Aucun champ modifié par l'IA.")
+    
+    def enrich_job_offer(self, job_data, html_content=""):
+        """Alias pour la méthode enrich - compatibilité avec le crawler"""
+        return self.enrich(job_data)
 
 # Extension possible :
 # class OpenRouterEnricher(LLMEnricher): ... 

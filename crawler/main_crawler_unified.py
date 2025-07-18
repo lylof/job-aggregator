@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-CRAWLER UNIFIÉ - Fusion des deux architectures + Améliorations Phase 2
+CRAWLER UNIFIÉ - Fusion des deux architectures + Améliorations Phase 2 + Monitoring Sentry
 
 Ce crawler combine :
 ✅ Le moteur Crawl4AI qui fonctionne (main_crawler.py)
 ✅ Le système multi-sources (AbstractSource)
 ✅ Les améliorations Phase 2 (classification + géolocalisation + nettoyage HTML)
+✅ Monitoring Sentry pour analyse d'erreurs en temps réel
 
 Usage: python crawler/main_crawler_unified.py
 """
@@ -25,8 +26,18 @@ from crawler.utils.job_classifier import JobClassifier
 from crawler.utils.geo_extractor import GeoExtractor
 from crawler.utils.intelligent_extractor import IntelligentExtractor
 from crawler.utils.html_cleaner import clean_html_content
+from crawler.sentry_config import init_sentry, capture_crawling_error, capture_extraction_error, log_crawling_performance
 from bs4 import BeautifulSoup
 import csv
+
+try:
+    from crawler.sentry_config import init_sentry, capture_crawling_error, capture_extraction_error, log_crawling_performance, capture_message
+except ImportError:
+    init_sentry = None
+    capture_crawling_error = None
+    capture_extraction_error = None
+    log_crawling_performance = None
+    capture_message = None
 
 def discover_sources():
     """Découvre automatiquement toutes les sources disponibles"""
@@ -34,8 +45,8 @@ def discover_sources():
     sources_dir = "crawler.sources"
     
     try:
-        import crawler.sources
-        for _, module_name, _ in pkgutil.iter_modules(crawler.sources.__path__):
+        import crawler.sources as sources_module
+        for _, module_name, _ in pkgutil.iter_modules(sources_module.__path__):
             try:
                 module = importlib.import_module(f"{sources_dir}.{module_name}")
                 for attr_name in dir(module):
@@ -102,7 +113,38 @@ async def process_source(source, crawler, enricher, classifier, geo_extractor, i
         
         if not result.success or not result.extracted_content:
             print(f"❌ Échec crawl listing {listing_url}")
-            continue
+            
+            # === FALLBACK HTTP POUR WORDPRESS (emploitogo.info) ===
+            fallback_data = None
+            if hasattr(source, 'use_fallback_http') and source.use_fallback_http:
+                print(f"🔄 Tentative fallback HTTP pour WordPress...")
+                try:
+                    fallback_data = source.fallback_http_crawl(listing_url, is_listing=True)
+                    if fallback_data:
+                        print(f"✅ Fallback HTTP réussi: {len(fallback_data)} offres trouvées")
+                        # Créer un faux result.extracted_content avec les données fallback
+                        result.extracted_content = json.dumps(fallback_data)
+                        result.success = True
+                    else:
+                        print(f"❌ Fallback HTTP échoué aussi")
+                except Exception as fallback_error:
+                    print(f"💥 Erreur fallback HTTP: {fallback_error}")
+                    capture_crawling_error(
+                        error=fallback_error,
+                        url=listing_url,
+                        source=source.name,
+                        extra_data={"type": "fallback_http", "original_crawl_failed": True}
+                    )
+            
+            # Si ni Crawl4AI ni fallback ne fonctionnent, capturer l'erreur
+            if not result.success:
+                capture_crawling_error(
+                    error=Exception(f"Échec crawl listing: {result.error if hasattr(result, 'error') else 'Erreur inconnue'}"),
+                    url=listing_url,
+                    source=source.name,
+                    extra_data={"type": "listing_crawl", "success": result.success, "fallback_attempted": fallback_data is not None}
+                )
+                continue
             
         try:
             data = json.loads(result.extracted_content)
@@ -163,6 +205,14 @@ async def process_source(source, crawler, enricher, classifier, geo_extractor, i
                 except Exception as e:
                     print(f"   └─ ❌ Erreur crawl détails: {e}")
                     detail_result = None  # S'assurer que detail_result est None en cas d'erreur
+                    
+                    # Capturer l'erreur dans Sentry
+                    capture_crawling_error(
+                        error=e,
+                        url=detail_url,
+                        source=source.name,
+                        extra_data={"type": "detail_crawl", "job_title": item.get('title', 'N/A')}
+                    )
                 
                 # === AMÉLIORATIONS PHASE 2 ===
                 
@@ -230,11 +280,17 @@ async def process_source(source, crawler, enricher, classifier, geo_extractor, i
                 if enricher:
                     print("🤖 Enrichissement LLM...")
                     try:
-                        enriched_data = await enricher.enrich_job_offer(item)
+                        enriched_data = enricher.enrich_job_offer(item)
                         item.update(enriched_data)
                         print("   └─ ✅ Enrichissement LLM appliqué")
                     except Exception as e:
                         print(f"   └─ ⚠️  Enrichissement LLM échoué: {e}")
+                        # Capturer l'erreur d'enrichissement dans Sentry
+                        capture_enrichment_error(
+                            error=e,
+                            job_data=item,
+                            llm_provider="Gemini"
+                        )
                 
                 # === EXPORT VERS SUPABASE ===
                 print("💾 Export vers Supabase...")
@@ -285,6 +341,13 @@ async def process_source(source, crawler, enricher, classifier, geo_extractor, i
                     
                 except Exception as e:
                     print(f"   └─ ❌ Erreur export Supabase: {e}")
+                    # Capturer l'erreur d'export dans Sentry
+                    capture_crawling_error(
+                        error=e,
+                        url=detail_url,
+                        source=source.name,
+                        extra_data={"type": "supabase_export", "job_title": item.get('title', 'N/A')}
+                    )
                 
                 print("✅ Offre traitée avec améliorations Phase 2")
                 total_processed += 1
@@ -296,10 +359,35 @@ async def process_source(source, crawler, enricher, classifier, geo_extractor, i
     set_last_scrap(datetime.now().isoformat())
     print(f"\n✅ Source {source.name} terminée: {total_processed} offres traitées")
     
+    # Enregistrer les métriques de performance dans Sentry
+    try:
+        for listing_url in source.get_listing_urls():
+            log_crawling_performance(
+                source=source.name,
+                url=listing_url,
+                duration=60,  # Estimation - vous pouvez mesurer le temps réel
+                items_found=total_processed
+            )
+    except Exception as e:
+        print(f"⚠️  Erreur logging performance: {e}")
+    
     return total_processed
 
 async def main():
     """Point d'entrée principal du crawler unifié"""
+    
+    # === INITIALISATION SENTRY ===
+    print("🔧 Initialisation Sentry...")
+    try:
+        init_sentry(environment="production")
+        print("✅ Sentry initialisé - Monitoring actif")
+        
+        # Remplacer sentry_sdk.capture_message par capture_message si disponible
+        if capture_message:
+            capture_message("Crawler unifié démarré", level="info")
+        
+    except Exception as e:
+        print(f"⚠️  Sentry non disponible: {e}")
     
     print("🚀 CRAWLER UNIFIÉ - DÉMARRAGE")
     print("=" * 60)
@@ -308,6 +396,7 @@ async def main():
     print("✅ Phase 2: Classification + Géolocalisation + Nettoyage HTML")
     print("✅ Crawl détails: ACTIVÉ")
     print("✅ Export: Supabase activé")
+    print("✅ Monitoring: Sentry activé")
     print("=" * 60)
     
     browser_cfg = BrowserConfig(headless=True, verbose=True, text_mode=True)

@@ -198,8 +198,8 @@ async def main():
 
                                 # 4. Si rien trouvé
                                 if name not in final_fields:
-                                    final_fields[name] = None
-                                    extraction_sources[name] = "not_found"
+                                final_fields[name] = None
+                                extraction_sources[name] = "not_found"
                             
                             # 3. LLM enrichment sur l'offre entière (après la boucle des champs)
                             if ENRICH_LLM and GEMINI_API_KEY:
@@ -284,7 +284,7 @@ async def main():
             except Exception as e:
                 print(f"[ERREUR] Décodage JSON principal : {e}")
                 print(f"Contenu extrait : {result.extracted_content[:500]}...\n--- Fin extrait ---")
-        else:
+            else:
             print(f"[ERREUR] Crawl principal échoué.")
             print(f"Message d'erreur : {getattr(result, 'error_message', 'Non spécifié')}")
             print(f"Statut success: {result.success}, extrait: {bool(getattr(result, 'extracted_content', None))}")

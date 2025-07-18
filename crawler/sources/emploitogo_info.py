@@ -1,26 +1,189 @@
-from crawler.core.source_abc import AbstractSource
-from crawler.extraction_schemas import job_offer_extraction_schema, job_detail_extraction_schema
+from ..core.source_abc import AbstractSource
+from ..extraction_schemas import job_offer_extraction_schema, job_detail_extraction_schema
+import requests
+from bs4 import BeautifulSoup
+import re
 
 class EmploitogoInfoSource(AbstractSource):
     @property
     def name(self):
         return "emploitogo_info"
 
+    @property
+    def use_fallback_http(self):
+        """Utilise HTTP fallback pour éviter les problèmes WordPress JavaScript"""
+        return True
+
     def get_listing_urls(self):
-        return ["https://www.emploitogo.info/"]
+        return ["https://www.emploitogo.info/emploitogo/"]
+
+    def fallback_http_crawl(self, url, is_listing=True):
+        """
+        Méthode fallback utilisant requests + BeautifulSoup
+        pour contourner les problèmes WordPress JavaScript
+        """
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'fr-FR,fr;q=0.9,en;q=0.8',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+        }
+        
+        try:
+            response = requests.get(url, headers=headers, timeout=30)
+            
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.text, 'html.parser')
+                
+                if is_listing:
+                    return self._extract_listing_fallback(soup, url)
+                else:
+                    return self._extract_detail_fallback(soup, url)
+            else:
+                print(f"❌ HTTP Fallback failed: {response.status_code} for {url}")
+                return None
+                
+        except Exception as e:
+            print(f"💥 HTTP Fallback error: {e} for {url}")
+            return None
+    
+    def _extract_listing_fallback(self, soup, base_url):
+        """Extraction fallback pour la page de listing"""
+        items = []
+        
+        # Sélecteurs WordPress standards pour les articles/posts
+        article_selectors = [
+            '.post', 'article', '.job-listing', '.job-item',
+            '.entry', '.listing-item', '.post-item'
+        ]
+        
+        articles = []
+        for selector in article_selectors:
+            found = soup.select(selector)
+            if found:
+                articles = found
+                break
+        
+        for article in articles:
+            # Extraire l'URL
+            link = article.find('a')
+            if link and link.get('href'):
+                url = link['href']
+                
+                # Normaliser l'URL
+                if url.startswith('/'):
+                    url = 'https://www.emploitogo.info' + url
+                elif not url.startswith('http'):
+                    url = 'https://www.emploitogo.info/' + url
+                
+                # Extraire le titre
+                title_selectors = ['h1', 'h2', 'h3', '.title', '.post-title', '.entry-title']
+                title = None
+                for sel in title_selectors:
+                    title_elem = article.select_one(sel)
+                    if title_elem:
+                        title = title_elem.get_text().strip()
+                        break
+                
+                if not title and link:
+                    title = link.get_text().strip()
+                
+                # Extraire la date
+                date_selectors = ['.date', '.post-date', '.entry-date', '.meta-date']
+                date_posted = None
+                for sel in date_selectors:
+                    date_elem = article.select_one(sel)
+                    if date_elem:
+                        date_posted = date_elem.get_text().strip()
+                        break
+                
+                # Extraire excerpt
+                excerpt_selectors = ['.excerpt', '.post-excerpt', '.summary']
+                excerpt = None
+                for sel in excerpt_selectors:
+                    exc_elem = article.select_one(sel)
+                    if exc_elem:
+                        excerpt = exc_elem.get_text().strip()
+                        break
+                
+                if title and url:
+                    items.append({
+                        'url': url,
+                        'title': title,
+                        'date_posted': date_posted,
+                        'excerpt': excerpt
+                    })
+        
+        return items if items else None
+    
+    def _extract_detail_fallback(self, soup, url):
+        """Extraction fallback pour les pages de détail"""
+        data = {'url': url}
+        
+        # Titre
+        title_selectors = ['h1.entry-title', 'h1.page-title', 'h1', '.title']
+        for sel in title_selectors:
+            title_elem = soup.select_one(sel)
+            if title_elem:
+                data['title'] = title_elem.get_text().strip()
+                break
+        
+        # Contenu principal
+        content_selectors = [
+            '.entry-content', '.post-content', '.content', '#content',
+            '.article-content', '.job-description'
+        ]
+        for sel in content_selectors:
+            content_elem = soup.select_one(sel)
+            if content_elem:
+                data['job_description'] = str(content_elem)
+                data['full_content'] = content_elem.get_text().strip()
+                break
+        
+        # Date
+        date_selectors = ['.entry-date', '.post-date', '.date', '.meta-date']
+        for sel in date_selectors:
+            date_elem = soup.select_one(sel)
+            if date_elem:
+                data['date_posted'] = date_elem.get_text().strip()
+                break
+        
+        # Extraction intelligente depuis le contenu
+        if 'full_content' in data:
+            content = data['full_content']
+            
+            # Entreprise
+            company = self.extract_company_from_content(content)
+            if company:
+                data['company_name'] = company
+            
+            # Localisation
+            location = self.extract_location_from_content(content)
+            if location:
+                data['location'] = location
+            
+            # Salaire
+            salary = self.extract_salary_from_content(content)
+            if salary:
+                data['salary'] = salary
+        
+        return data
 
     def get_listing_schema(self):
-        """Schéma de la page de résultats (listing) pour emploitogo.info"""
+        """Schéma de la page de résultats (listing) pour emploitogo.info - CORRIGÉ"""
         return {
             "name": "JobOffersEmploitogoInfo",
-            "baseSelector": "article.hentry",
+            "baseSelector": ".post-item",
             "baseFields": [
-                {"name": "url", "selector": "a.entry-image-link, h2.entry-title a", "type": "attribute", "attribute": "href"}
+                {"name": "url", "selector": "a", "type": "attribute", "attribute": "href"}
             ],
             "fields": [
-                {"name": "title", "selector": "h2.entry-title a", "type": "text"},
-                {"name": "date_posted", "selector": ".entry-meta .meta-date", "type": "text"},
-                {"name": "excerpt", "selector": ".entry-excerpt", "type": "text"}
+                {"name": "title", "selector": "h3 a, .post-title a", "type": "text"},
+                {"name": "date_posted", "selector": ".post-date, .meta-date", "type": "text"},
+                {"name": "excerpt", "selector": ".post-excerpt, .excerpt", "type": "text"},
+                {"name": "category", "selector": ".post-category", "type": "text"}
             ]
         }
 
@@ -117,8 +280,6 @@ class EmploitogoInfoSource(AbstractSource):
         if not content:
             return None
             
-        import re
-        
         # Patterns pour identifier les entreprises
         patterns = [
             r"([A-Z][A-Za-z\s&-]+(?:SARL|SA|SAS|EURL|GIE|ONG|Association))",
@@ -139,8 +300,6 @@ class EmploitogoInfoSource(AbstractSource):
         if not content:
             return None
             
-        import re
-        
         # Villes du Togo
         villes_togo = ['Lomé', 'Kpalimé', 'Atakpamé', 'Sokodé', 'Kara', 'Dapaong', 'Tsévié', 'Aného', 'Bassar', 'Niamtougou']
         
@@ -167,8 +326,6 @@ class EmploitogoInfoSource(AbstractSource):
         if not content:
             return None
             
-        import re
-        
         # Patterns pour identifier les salaires
         patterns = [
             r"(\d+(?:\.\d+)?\s*(?:000)?\s*FCFA)",

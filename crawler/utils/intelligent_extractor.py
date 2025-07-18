@@ -16,11 +16,12 @@ Usage: from crawler.utils.intelligent_extractor import IntelligentExtractor
 """
 
 import re
+import json
 from typing import Dict, List, Optional, Any
 from bs4 import BeautifulSoup
 
 class IntelligentExtractor:
-    """Extracteur intelligent pour récupérer toutes les données disponibles"""
+    """Extracteur intelligent avec fallback robuste"""
     
     def __init__(self):
         # Villes du Togo avec leurs régions
@@ -31,37 +32,191 @@ class IntelligentExtractor:
             'niamtougou': 'Kara', 'vogan': 'Maritime', 'tabligbo': 'Maritime'
         }
         
-        # Patterns de reconnaissance
-        self.company_patterns = [
-            r"([A-Z][A-Za-z\s&\-\.]+(?:SARL|SA|SAS|EURL|GIE|ONG|Association|Groupe|Société|Entreprise))",
-            r"(?:L'entreprise|La société|Le groupe|La compagnie)\s+([A-Z][A-Za-z\s&\-\.]+)",
-            r"([A-Z][A-Za-z\s&\-\.]{3,})\s+(?:recrute|recherche|sollicite)",
-            r"(?:Chez|Rejoignez)\s+([A-Z][A-Za-z\s&\-\.]+)",
-            r"([A-Z][A-Z\s&\-\.]+)\s*-\s*(?:Togo|Lomé|Kara)"
-        ]
-        
+        # Patterns pour extraction fallback
         self.salary_patterns = [
-            r"(\d+(?:\.\d+)?\s*(?:000|K)?\s*(?:à|-)?\s*\d*(?:\.\d+)?\s*(?:000|K)?\s*FCFA)",
-            r"(?:salaire|rémunération|traitement)\s*:?\s*([^\n\r]{5,50})",
-            r"(\d+\s*(?:000|K)?\s*FCFA\s*(?:net|brut)?)",
-            r"(?:entre|de)\s+(\d+\s*(?:000|K)?\s*(?:à|et)\s*\d+\s*(?:000|K)?\s*FCFA)"
+            r'(\d+\s*(?:000)?\s*-?\s*\d*\s*(?:000)?\s*(?:FCFA|F\s*CFA|francs?))',
+            r'(Salaire\s*:?\s*[^\n]+)',
+            r'(\d+\s*(?:millions?|k|K)\s*(?:FCFA|F\s*CFA)?)'
         ]
         
-        self.contract_patterns = [
-            r"\b(CDI|CDD|Stage|Freelance|Consultant|Temps partiel|Temps plein|Intérim|Vacation)\b",
-            r"(?:contrat|type)\s*:?\s*(CDI|CDD|Stage|Freelance|Consultant)",
-            r"\b(Stagiaire|Consultant|Freelancer|Employé|Cadre)\b"
+        self.contract_patterns = ['CDD', 'CDI', 'Stage', 'Freelance', 'Consultant', 'Temps partiel', 'Intérim']
+        
+        # AJOUT DES PATTERNS D'ENTREPRISES MANQUANTS
+        self.company_patterns = [
+            r"([A-Z][A-Za-z\s&-]+(?:SARL|SA|SAS|EURL|GIE|ONG|Association))",
+            r"L'entreprise\s+([A-Z][A-Za-z\s&-]+)",
+            r"La société\s+([A-Z][A-Za-z\s&-]+)",
+            r"([A-Z][A-Za-z\s&-]+)\s+recrute",
+            r"Entreprise\s*:?\s*([A-Z][A-Za-z\s&-]+)",
+            r"Employeur\s*:?\s*([A-Z][A-Za-z\s&-]+)"
         ]
         
-        self.email_patterns = [
-            r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b",
-            r"(?:email|mail|contact)\s*:?\s*([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,})"
+        self.company_selectors = [
+            'h3 a[href*="/recruteur/"]',
+            '.company-name', 
+            '.card-block-company h3 a',
+            '.company-info h3',
+            'h2', 'h3'
         ]
         
+        self.email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
         self.phone_patterns = [
-            r"(?:\+228|228)?\s*\d{2}\s*\d{2}\s*\d{2}\s*\d{2}",
-            r"(?:tel|téléphone|phone)\s*:?\s*((?:\+228|228)?\s*\d{2}\s*\d{2}\s*\d{2}\s*\d{2})"
+            r'(\+228\s*\d{2}\s*\d{2}\s*\d{2}\s*\d{2})',
+            r'(\d{2}\s*\d{2}\s*\d{2}\s*\d{2})'
         ]
+
+    def extract_from_html(self, html_content: str, job_title: str = "") -> Dict[str, Any]:
+        """Extraction fallback directe depuis le HTML"""
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+            text = soup.get_text()
+            
+            extracted_data = {}
+            
+            # Extraction nom d'entreprise
+            company = self._extract_company(soup)
+            if company:
+                extracted_data['company_name'] = company
+                print(f"  📋 Entreprise: {company}")
+            
+            # Extraction salaire
+            salary = self._extract_salary(text)
+            if salary:
+                extracted_data['salary'] = salary
+                print(f"  💰 Salaire: {salary}")
+            
+            # Extraction type de contrat
+            contract = self._extract_contract_type(text)
+            if contract:
+                extracted_data['employment_type'] = contract
+                print(f"  📋 Contrat: {contract}")
+            
+            # Extraction email
+            email = self._extract_email(text)
+            if email:
+                extracted_data['contact_email'] = email
+                print(f"  📧 Email: {email}")
+            
+            # Extraction téléphone
+            phone = self._extract_phone(text)
+            if phone:
+                extracted_data['contact_phone'] = phone
+                print(f"  📞 Téléphone: {phone}")
+            
+            # Extraction compétences
+            skills = self._extract_skills(soup, text)
+            if skills:
+                extracted_data['skills'] = skills
+                print(f"  🎯 Compétences: {', '.join(skills[:3])}...")
+            
+            return extracted_data
+            
+        except Exception as e:
+            print(f"  ❌ Erreur extraction HTML: {e}")
+            return {}
+
+    def _extract_company(self, soup: BeautifulSoup) -> Optional[str]:
+        """Extrait le nom de l'entreprise"""
+        for selector in self.company_selectors:
+            try:
+                element = soup.select_one(selector)
+                if element and element.get_text(strip=True):
+                    company = element.get_text(strip=True)
+                    # Nettoyer le nom d'entreprise
+                    company = re.sub(r'\s+', ' ', company)
+                    if len(company) > 2 and not company.lower() in ['emploi', 'job', 'recrutement']:
+                        return company
+            except:
+                continue
+        return None
+
+    def _extract_salary(self, text: str) -> Optional[str]:
+        """Extrait le salaire"""
+        for pattern in self.salary_patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                salary = match.group(1).strip()
+                # Nettoyer et valider
+                if len(salary) > 3 and any(c.isdigit() for c in salary):
+                    return salary
+        return None
+
+    def _extract_contract_type(self, text: str) -> Optional[str]:
+        """Extrait le type de contrat"""
+        for pattern in self.contract_patterns:
+            if re.search(rf'\b{pattern}\b', text, re.IGNORECASE):
+                return pattern
+        return None
+
+    def _extract_email(self, text: str) -> Optional[str]:
+        """Extrait l'email de contact"""
+        match = re.search(self.email_pattern, text)
+        if match:
+            email = match.group().lower()
+            # Valider que ce n'est pas un email générique
+            if not any(generic in email for generic in ['noreply', 'no-reply', 'example']):
+                return email
+        return None
+
+    def _extract_phone(self, text: str) -> Optional[str]:
+        """Extrait le numéro de téléphone"""
+        for pattern in self.phone_patterns:
+            match = re.search(pattern, text)
+            if match:
+                return match.group(1).strip()
+        return None
+
+    def _extract_skills(self, soup: BeautifulSoup, text: str) -> List[str]:
+        """Extrait les compétences requises"""
+        skills = []
+        
+        # Chercher dans les listes
+        skill_sections = soup.find_all(['ul', 'ol'])
+        for section in skill_sections:
+            if any(keyword in section.get_text().lower() for keyword in ['compétence', 'skill', 'profil', 'qualification']):
+                items = section.find_all('li')
+                for item in items:
+                    skill_text = item.get_text(strip=True)
+                    if len(skill_text) > 2 and len(skill_text) < 100:
+                        skills.append(skill_text)
+        
+        # Patterns de compétences communes
+        skill_patterns = [
+            r'(?:Maîtrise|Connaissance|Expérience)\s+(?:de|en|du)\s+([^.,\n]+)',
+            r'(?:Diplôme|Formation)\s+en\s+([^.,\n]+)',
+            r'(?:Bac\+?\d+)\s+en\s+([^.,\n]+)'
+        ]
+        
+        for pattern in skill_patterns:
+            matches = re.finditer(pattern, text, re.IGNORECASE)
+            for match in matches:
+                skill = match.group(1).strip()
+                if len(skill) > 2 and len(skill) < 50:
+                    skills.append(skill)
+        
+        # Retourner les compétences uniques
+        return list(set(skills))[:10]  # Limiter à 10 compétences
+
+    def extract(self, html_content: str, job_title: str = "") -> Dict[str, Any]:
+        """Point d'entrée principal pour l'extraction"""
+        print("🧠 Extraction intelligente des données...")
+        
+        # Tentative d'extraction directe
+        extracted_data = self.extract_from_html(html_content, job_title)
+        
+        if extracted_data:
+            print("   └─ ✅ Données complétées intelligemment")
+            for key, value in extracted_data.items():
+                if isinstance(value, str) and len(value) > 50:
+                    print(f"     📋 {key}: {value[:50]}...")
+                elif isinstance(value, list):
+                    print(f"     📋 {key}: {len(value)} éléments")
+                else:
+                    print(f"     📋 {key}: {value}")
+        else:
+            print("   └─ ⚠️  Aucune donnée supplémentaire extraite")
+        
+        return extracted_data
 
     def extract_all_data(self, html_content: str, existing_data: Dict[str, Any] = None) -> Dict[str, Any]:
         """Extrait intelligemment toutes les données disponibles du HTML"""
@@ -77,11 +232,11 @@ class IntelligentExtractor:
         extracted_data = {
             'company_name': self._extract_company_name(text_content, existing_data.get('company_name')),
             'location': self._extract_location(text_content, existing_data.get('location')),
-            'salary': self._extract_salary(text_content, existing_data.get('salary')),
-            'contract_type': self._extract_contract_type(text_content, existing_data.get('contract_type')),
-            'contact_email': self._extract_email(text_content, existing_data.get('contact_email')),
-            'contact_phone': self._extract_phone(text_content, existing_data.get('contact_phone')),
-            'skills': self._extract_skills(text_content, soup, existing_data.get('skills')),
+            'salary': self._extract_salary(text_content),
+            'contract_type': self._extract_contract_type(text_content),
+            'contact_email': self._extract_email(text_content),
+            'contact_phone': self._extract_phone(text_content),
+            'skills': self._extract_skills(soup, text_content),
             'experience_level': self._extract_experience(text_content, existing_data.get('experience_level')),
             'education_level': self._extract_education(text_content, existing_data.get('education_level')),
             'application_deadline': self._extract_deadline(text_content, existing_data.get('application_deadline')),
@@ -144,115 +299,6 @@ class IntelligentExtractor:
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
                 return match.group(1).strip()
-        
-        return existing
-
-    def _extract_salary(self, text: str, existing: str = None) -> Optional[str]:
-        """Extrait le salaire"""
-        if existing and ('fcfa' in existing.lower() or 'cfa' in existing.lower()):
-            return existing
-            
-        for pattern in self.salary_patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                salary = match.group(1).strip()
-                if len(salary) > 3:
-                    return salary
-        
-        return existing
-
-    def _extract_contract_type(self, text: str, existing: str = None) -> Optional[str]:
-        """Extrait le type de contrat"""
-        if existing and existing.upper() in ['CDI', 'CDD', 'STAGE', 'FREELANCE']:
-            return existing
-            
-        for pattern in self.contract_patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                contract = match.group(1).strip().upper()
-                if contract in ['CDI', 'CDD', 'STAGE', 'FREELANCE', 'CONSULTANT']:
-                    return contract
-        
-        # Détection par mots-clés
-        text_lower = text.lower()
-        if 'stage' in text_lower or 'stagiaire' in text_lower:
-            return 'STAGE'
-        elif 'freelance' in text_lower or 'consultant' in text_lower:
-            return 'FREELANCE'
-        elif 'cdi' in text_lower:
-            return 'CDI'
-        elif 'cdd' in text_lower:
-            return 'CDD'
-        
-        return existing
-
-    def _extract_email(self, text: str, existing: str = None) -> Optional[str]:
-        """Extrait l'email de contact"""
-        if existing and '@' in existing:
-            return existing
-            
-        for pattern in self.email_patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                email = match.group(1) if match.groups() else match.group(0)
-                if '@' in email and '.' in email:
-                    return email.strip()
-        
-        return existing
-
-    def _extract_phone(self, text: str, existing: str = None) -> Optional[str]:
-        """Extrait le numéro de téléphone"""
-        if existing and len(existing) > 8:
-            return existing
-            
-        for pattern in self.phone_patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                phone = match.group(1) if match.groups() else match.group(0)
-                # Nettoyer le numéro
-                phone = re.sub(r'[^\d+]', '', phone)
-                if len(phone) >= 8:
-                    return phone
-        
-        return existing
-
-    def _extract_skills(self, text: str, soup: BeautifulSoup, existing: str = None) -> Optional[str]:
-        """Extrait les compétences requises"""
-        if existing and len(existing) > 20:
-            return existing
-            
-        # Chercher les listes de compétences
-        skills_sections = soup.find_all(['ul', 'ol'], string=re.compile(r'compétence|skill|requis|profil', re.I))
-        
-        skills = []
-        
-        # Compétences techniques courantes
-        tech_skills = [
-            'Python', 'Java', 'JavaScript', 'PHP', 'C++', 'HTML', 'CSS', 'SQL',
-            'Excel', 'Word', 'PowerPoint', 'Photoshop', 'AutoCAD', 'SAP',
-            'Odoo', 'Sage', 'Comptabilité', 'Marketing', 'Communication'
-        ]
-        
-        text_lower = text.lower()
-        for skill in tech_skills:
-            if skill.lower() in text_lower:
-                skills.append(skill)
-        
-        # Patterns de compétences
-        skill_patterns = [
-            r"(?:compétences?|skills?)\s*:?\s*([^\n\r]{10,100})",
-            r"(?:maîtrise|connaissance)\s+(?:de|en)\s+([A-Za-z\s,]+)",
-            r"(?:expérience|expertise)\s+(?:en|avec)\s+([A-Za-z\s,]+)"
-        ]
-        
-        for pattern in skill_patterns:
-            matches = re.findall(pattern, text, re.IGNORECASE)
-            for match in matches:
-                if len(match) > 5:
-                    skills.append(match.strip())
-        
-        if skills:
-            return ', '.join(skills[:5])  # Limiter à 5 compétences
         
         return existing
 

@@ -1,5 +1,5 @@
-from crawler.core.source_abc import AbstractSource
-from crawler.extraction_schemas import job_offer_extraction_schema, job_detail_extraction_schema
+from ..core.source_abc import AbstractSource
+from ..extraction_schemas import job_offer_extraction_schema, job_detail_extraction_schema
 
 class EmploiTgSource(AbstractSource):
     @property
@@ -38,7 +38,7 @@ class EmploiTgSource(AbstractSource):
                 {"name": "date_posted", "selector": ".date-posted, .job-date, .publication-date", "type": "text"},
                 
                 # === DESCRIPTION COMPLÈTE ===
-                {"name": "job_description", "selector": "div.job-description, .job-content, .description-content", "type": "html"},
+                {"name": "job_description", "selector": "#main-content > div.page-content > div:nth-child(1) > div.page-application-wrapper > div.card.card-block.mt-3 > article, div.job-description, .job-content, .description-content", "type": "html"},
                 
                 # === DÉTAILS DU POSTE ===
                 {"name": "contract_type", "selector": ".contract-type, .job-type, .employment-type", "type": "text"},
@@ -71,7 +71,10 @@ class EmploiTgSource(AbstractSource):
                 
                 # === DONNÉES BRUTES POUR ANALYSE ===
                 {"name": "raw_job_info", "selector": ".job-info, .job-details, .job-meta", "type": "html"},
-                {"name": "all_text_content", "selector": ".job-content, .main-content", "type": "text"}
+                {"name": "all_text_content", "selector": ".job-content, .main-content", "type": "text"},
+                
+                # === CONTENU PRINCIPAL SPÉCIFIQUE (NOUVEAU) ===
+                {"name": "main_article_content", "selector": "#main-content > div.page-content > div:nth-child(1) > div.page-application-wrapper > div.card.card-block.mt-3 > article", "type": "html"}
             ]
         }
 
