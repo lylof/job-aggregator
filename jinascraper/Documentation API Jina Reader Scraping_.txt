@@ -1,0 +1,959 @@
+﻿Documentation Technique sur l'Implémentation de l'API Jina Reader pour l'Agrégation d'Offres d'Emploi
+
+
+Cette documentation technique exhaustive est conçue pour servir de guide de référence aux développeurs Python chargés de l'intégration de l'API Jina Reader (r.jina.ai) en tant que solution unique et centralisée pour l'accès au contenu web dans le cadre d'un projet d'agrégation d'offres d'emploi. Elle va au-delà de la documentation de surface pour explorer les fonctionnalités avancées, les meilleures pratiques, la gestion des performances et des erreurs, et les considérations clés pour une implémentation robuste et efficace.
+
+
+1. Résumé Exécutif
+
+
+L'API Jina Reader (r.jina.ai) se présente comme une solution puissante et simplifiée pour l'extraction de contenu web. Sa fonction principale est de convertir n'importe quelle URL en un texte Markdown propre et structuré, optimisé pour l'ingestion par les grands modèles de langage (LLM). Le service est conçu pour extraire le contenu essentiel d'une page, en ignorant les éléments superflus tels que la navigation, les publicités ou les scripts, ce qui est crucial pour la qualité des données destinées aux LLM.1
+Jina Reader opère principalement en mode "Reader" pour l'extraction de contenu à partir d'une URL donnée, mais propose également un mode "Search" (s.jina.ai) pour la recherche web et l'extraction des résultats les plus pertinents.3 Pour le projet d'agrégation d'offres d'emploi, le mode "Reader" sera le plus pertinent, car il permet de cibler spécifiquement les pages de détail des offres une fois leurs URLs identifiées.
+Un avantage distinctif de Jina Reader réside dans sa capacité à gérer les complexités du web moderne. Il utilise des navigateurs headless (comme Puppeteer) en arrière-plan pour rendre les pages web, ce qui lui permet d'extraire du contenu chargé dynamiquement via JavaScript, ainsi que des éléments encapsulés dans des iframes ou des Shadow DOMs.1 Cette robustesse est essentielle pour scraper des sites d'offres d'emploi souvent riches en scripts. De plus, l'API prend en charge l'extraction native de contenu à partir de fichiers PDF et peut même générer automatiquement des légendes pour les images, enrichissant ainsi le contexte disponible pour les LLM en aval.1
+L'intégration de Jina Reader dans le projet d'agrégation d'offres d'emploi est une décision stratégique. En déléguant entièrement la tâche complexe et souvent fastidieuse de l'accès au contenu web à Jina Reader, l'équipe de développement peut concentrer ses efforts et son expertise sur l'extraction de données via LLM, qui constitue le cœur de la valeur ajoutée du projet. Cette approche réduit considérablement la charge de développement, la maintenance de l'infrastructure de scraping et les coûts opérationnels associés à la gestion d'une solution de scraping interne. Cela positionne Jina Reader non seulement comme un outil, mais comme un facilitateur stratégique permettant à l'équipe de se concentrer sur sa proposition de valeur unique.
+La robustesse de Jina Reader découle de son architecture sous-jacente. Hébergée sur Google Cloud Run, la plateforme est conçue pour une scalabilité massive et une résilience face aux charges imprévisibles, y compris les attaques DDoS.2 Cette infrastructure permet à Jina Reader de gérer efficacement les problèmes de blocage potentiels souvent rencontrés lors du scraping, agissant de fait comme une couche d'accès web avancée qui abstrait les complexités de la lutte contre les systèmes anti-bots.4 Le fait que Jina Reader gère en interne des navigateurs headless, des options de proxy et une mise à l'échelle dynamique signifie que le projet n'a pas besoin de développer et de maintenir ses propres stratégies complexes de contournement des protections anti-bots, ce qui représente un avantage opérationnel significatif.
+Bien que Jina Reader offre une "simplicité" d'utilisation via de simples requêtes HTTP, cette facilité d'intégration masque une complexité technique considérable gérée par le fournisseur de services. Le fait que l'API s'appuie sur des instances complètes de Chrome headless pour le rendu des pages web, avec des temps de démarrage optimisés et une gestion intelligente des ressources sur Cloud Run, est une abstraction clé qui bénéficie directement au développeur.11
+Cependant, il est essentiel de noter certaines limitations. Les requêtes gratuites sont soumises à des limites de débit strictes (20 requêtes par minute par IP), ce qui rend l'utilisation d'une clé API indispensable pour un débit plus élevé (200 RPM avec une clé API gratuite, 500 RPM avec une clé payante, et jusqu'à 5000 RPM avec une clé premium pour l'API Reader).1 L'API ne peut pas accéder au contenu protégé par des murs de connexion (login walls).14 Elle ne fournit pas de services de traduction et renvoie le contenu dans la langue originale de l'URL.2 Enfin, elle ne traite pas le contenu multimédia au-delà du sous-titrage d'images.17
+En résumé, Jina Reader est une solution hautement appropriée et performante pour les besoins d'accès au contenu web du projet, à condition que ses limites, notamment les quotas de requêtes et l'incapacité à gérer les pages nécessitant une authentification, soient gérées efficacement dans la stratégie d'implémentation.
+Mode API
+	Endpoint Principal
+	Description
+	Cas d'Utilisation Principal pour l'Agrégation d'Emploi
+	Reader
+	https://r.jina.ai/{URL}
+	Convertit une URL en texte Markdown propre et LLM-friendly.
+	Extraction des détails complets des offres d'emploi à partir d'URLs spécifiques.
+	Search
+	https://s.jina.ai/{query}
+	Recherche sur le web et renvoie le contenu des 5 meilleurs résultats.
+	Non directement utilisé pour l'extraction de contenu, mais peut être utile pour la découverte initiale d'URLs de listes d'offres si les sources ne sont pas connues.
+	Ground
+	Non spécifié (via Haystack)
+	Effectue une vérification des faits à l'aide d'un moteur de "grounding".
+	Non pertinent pour le projet d'agrégation d'offres d'emploi.
+	
+
+2. Guide de Démarrage Rapide
+
+
+Pour commencer à utiliser l'API Jina Reader en Python, il est nécessaire d'installer les bibliothèques de requêtes HTTP appropriées. Pour les requêtes synchrones, la bibliothèque requests est un choix simple et populaire. Cependant, pour des opérations de scraping à grande échelle qui nécessitent un traitement parallèle et une gestion efficace des E/S, des bibliothèques asynchrones comme httpx ou aiohttp sont fortement recommandées.18 Pour la gestion des limites de débit dans un contexte asynchrone, la bibliothèque
+aiolimiter est également utile.19
+L'installation des dépendances s'effectue via pip :
+
+
+Bash
+
+
+
+
+pip install requests httpx aiohttp aiolimiter
+
+
+
+Obtention d'une Clé API Jina Reader
+
+
+Une clé API Jina AI (un Bearer Token) est essentielle pour bénéficier de limites de débit plus élevées et garantir la viabilité du projet d'agrégation d'offres d'emploi à grande échelle.5 Sans clé API, le service est limité à 20 requêtes par minute (RPM) par adresse IP. Avec une clé API gratuite, cette limite passe à 200 RPM, et les plans premium peuvent atteindre 5000 RPM pour l'API Reader.1 Cette augmentation du débit est fondamentale pour la performance opérationnelle et la capacité du système à traiter un grand volume d'URLs, transformant l'API d'un outil de test en un composant prêt pour la production.
+Les clés API peuvent être obtenues depuis le site web de Jina AI, généralement via un tableau de bord API ou une section de gestion des clés.6 Il est impératif de stocker cette clé API de manière sécurisée, de préférence via une variable d'environnement (par exemple,
+JINA_API_KEY ou JINA_AUTH_TOKEN), plutôt que de la coder en dur dans le script.6 Lors de l'envoi des requêtes, la clé doit être incluse dans l'en-tête
+Authorization sous la forme Bearer YOUR_API_KEY.15
+
+
+Exemple de Code Python Simple (GET)
+
+
+L'exemple suivant illustre comment effectuer une requête de base à l'API Jina Reader en utilisant la bibliothèque requests. Il montre comment construire l'URL de la requête, inclure l'en-tête d'autorisation avec votre clé API, et spécifier le format de sortie souhaité (Markdown par défaut ou JSON).
+La simplicité de cet appel API masque une complexité significative gérée en arrière-plan par Jina AI. Lorsque le développeur envoie une simple requête GET, Jina Reader déploie en réalité une instance de navigateur headless (comme Chrome via Puppeteer) dans son infrastructure cloud (Google Cloud Run) pour rendre la page web cible.1 Ce processus inclut l'exécution de JavaScript, le chargement des ressources dynamiques, et l'interaction avec le DOM, avant d'extraire et de nettoyer le contenu. Cette abstraction de la complexité du rendu côté client est ce qui rend Jina Reader si "simple" d'utilisation pour le développeur, car elle élimine le besoin de gérer une infrastructure de scraping complexe en interne.
+
+
+Python
+
+
+
+
+import requests
+import os
+import json
+
+# Il est fortement recommandé de stocker votre clé API dans une variable d'environnement.
+# Exemple (à exécuter dans votre terminal avant de lancer le script) :
+# export JINA_API_KEY="VOTRE_CLE_API_JINA"
+JINA_API_KEY = os.getenv("JINA_API_KEY") 
+
+def get_jina_reader_content(target_url: str, api_key: str = None, json_format: bool = False) -> str | dict | None:
+   """
+   Récupère le contenu d'une URL en utilisant l'API Jina Reader.
+   
+   Args:
+       target_url: L'URL de la page à scraper.
+       api_key: Votre clé API Jina AI pour des limites de débit plus élevées.
+       json_format: Si True, demande une sortie JSON ; sinon, Markdown.
+       
+   Returns:
+       Le contenu scrapé sous forme de chaîne (Markdown) ou de dictionnaire (JSON), ou None en cas d'erreur.
+   """
+   base_url = "https://r.jina.ai/"
+   # L'URL cible doit être encodée si elle contient des caractères spéciaux,
+   # mais 'requests' le fait souvent automatiquement pour le chemin de l'URL.
+   # Pour le préfixe Jina, on concatène directement.
+   jina_url = f"{base_url}{target_url}"
+   
+   headers = {}
+   if api_key:
+       headers["Authorization"] = f"Bearer {api_key}"
+   
+   if json_format:
+       headers["Accept"] = "application/json"
+   else:
+       # Le format par défaut est Markdown, mais le spécifier explicitement est une bonne pratique.
+       headers["Accept"] = "text/markdown" 
+
+   try:
+       # Ajout d'un timeout raisonnable pour éviter que les requêtes ne bloquent indéfiniment.
+       response = requests.get(jina_url, headers=headers, timeout=30) 
+       response.raise_for_status() # Lève une exception HTTPError pour les codes de statut 4xx ou 5xx
+       
+       if json_format:
+           return response.json()
+       else:
+           return response.text
+           
+   except requests.exceptions.HTTPError as http_err:
+       print(f"Erreur HTTP lors de la récupération de {target_url}: {http_err}")
+       print(f"Code de statut: {http_err.response.status_code}")
+       try:
+           # Tente d'afficher le corps de la réponse en cas d'erreur pour plus de détails
+           error_details = http_err.response.json()
+           print(f"Détails de l'erreur API: {json.dumps(error_details, indent=2)}")
+       except json.JSONDecodeError:
+           print(f"Corps de la réponse d'erreur (non-JSON): {http_err.response.text[:200]}...")
+       return None
+   except requests.exceptions.ConnectionError as conn_err:
+       print(f"Erreur de connexion lors de la récupération de {target_url}: {conn_err}")
+       return None
+   except requests.exceptions.Timeout as timeout_err:
+       print(f"Délai d'attente dépassé lors de la récupération de {target_url}: {timeout_err}")
+       return None
+   except requests.exceptions.RequestException as req_err:
+       print(f"Une erreur inattendue est survenue lors de la récupération de {target_url}: {req_err}")
+       return None
+
+if __name__ == "__main__":
+   example_url = "https://simonwillison.net/2024/Jun/16/jina-ai-reader/"
+   
+   # Exemple 1: Récupération de contenu Markdown (sans clé API pour un test de base)
+   print(f"--- Récupération de Markdown pour {example_url} (sans clé API) ---")
+   markdown_content = get_jina_reader_content(example_url)
+   if markdown_content:
+       print(markdown_content[:500]) # Affiche les 500 premiers caractères
+   else:
+       print("Échec de la récupération du contenu Markdown.")
+   
+   # Exemple 2: Récupération de contenu JSON (avec clé API)
+   if JINA_API_KEY:
+       print(f"\n--- Récupération de JSON pour {example_url} (avec clé API) ---")
+       json_content = get_jina_reader_content(example_url, api_key=JINA_API_KEY, json_format=True)
+       if json_content:
+           print(json.dumps(json_content, indent=2))
+       else:
+           print("Échec de la récupération du contenu JSON.")
+   else:
+       print("\nJINA_API_KEY non définie. L'exemple JSON avec clé API est ignoré.")
+
+
+
+
+3. Guide de Référence de l'API
+
+
+
+
+3.1. Endpoint Principal : https://r.jina.ai/{URL}
+
+
+L'endpoint https://r.jina.ai/{URL} est le point d'entrée central pour le mode "Reader" de l'API Jina. Son objectif est de transformer le contenu d'une page web donnée par {URL} en un format propre et structuré, principalement en Markdown ou JSON, qui est facilement consommable par les LLM.3 L'API se distingue par sa capacité à isoler le contenu principal, en éliminant les éléments non pertinents tels que les barres de navigation, les publicités, les pieds de page ou les scripts JavaScript, garantissant ainsi une entrée de haute qualité pour l'extraction de données.1
+Ce processus de "nettoyage" est rendu possible par une architecture sophistiquée. Jina Reader ne se contente pas de récupérer le HTML brut ; il agit comme un navigateur web automatisé hébergé dans le cloud. Il utilise des outils comme Puppeteer pour lancer des instances de navigateurs Chrome headless, rendant ainsi la page web complète, y compris tout le contenu généré par JavaScript.1 Cette capacité est fondamentale pour interagir avec les sites web modernes qui dépendent fortement de JavaScript pour afficher leur contenu, y compris de nombreuses plateformes d'offres d'emploi. L'abstraction de cette complexité de rendu est un avantage majeur pour le développeur.
+Méthodes HTTP Supportées:
+* GET: C'est la méthode la plus courante et la plus simple pour interagir avec l'API. Elle consiste simplement à préfixer l'URL cible avec https://r.jina.ai/. Par exemple, pour scraper https://example.com, la requête serait https://r.jina.ai/https://example.com.1 Cette méthode est adéquate pour la majorité des pages web statiques ou celles dont le contenu est directement accessible via l'URL.
+* POST: La méthode POST est nécessaire pour gérer les applications monopages (SPA) qui utilisent le routage basé sur les fragments (c'est-à-dire les URLs contenant un #, comme https://example.com/#/route). Conformément aux standards web, la partie de l'URL après le # n'est pas envoyée au serveur lors d'une requête GET. Pour s'assurer que Jina Reader traite l'URL complète, y compris le fragment, l'URL cible doit être fournie comme un paramètre url dans le corps de la requête POST.3 Cette distinction souligne la manière dont Jina Reader interprète les URLs de manière similaire à un navigateur, où les fragments sont gérés côté client.
+L'extraction de contenu va au-delà de la simple suppression de balises HTML. Jina Reader intègre un moteur de parsing intelligent, probablement basé sur des algorithmes comme Readability.js 1 et son propre modèle de langage, ReaderLM-v2.9 Ce modèle est spécifiquement entraîné pour comprendre la structure web et convertir le HTML bruyant en Markdown propre. Cette capacité à interpréter et nettoyer intelligemment le contenu est une valeur ajoutée significative pour les applications basées sur les LLM, car elle réduit considérablement le besoin de post-traitement des données par le développeur.
+
+
+3.2. Paramètres d'URL (Query Parameters)
+
+
+Jina Reader offre un ensemble complet de paramètres qui permettent de personnaliser finement le comportement de l'API. Ces paramètres peuvent être inclus dans la chaîne de requête pour les requêtes GET ou dans le corps JSON pour les requêtes POST. Le tableau de bord interactif de l'API Jina AI 20 et le dépôt GitHub 3 sont des ressources précieuses pour explorer ces options.
+L'utilisation judicieuse de ces paramètres est cruciale pour optimiser la précision de l'extraction, la performance et la fiabilité du scraping des offres d'emploi. Par exemple, les sélecteurs CSS (css_selector_only, css_selector_wait_for) sont particulièrement utiles pour cibler des blocs de contenu spécifiques sur des pages de détail d'offres d'emploi, garantissant que seuls les éléments pertinents (titre, description, salaire, etc.) sont extraits. Le paramètre timeout permet de gérer les pages lentes, tandis que les options de cache (x-no-cache) sont importantes pour s'assurer de toujours récupérer les informations les plus récentes.
+
+
+Paramètre (Header HTTP)
+	Description
+	Valeurs Possibles / Type
+	Utilisation Recommandée pour Agrégateur d'Emploi
+	Snippet ID(s)
+	url (Corps POST)
+	L'URL cible à scraper. Utilisé pour les SPAs avec routage basé sur le hachage.
+	String (URL encodée)
+	Essentiel pour les sites d'offres d'emploi utilisant des frameworks JavaScript modernes avec routage côté client.
+	3
+	timeout
+	Temps d'attente maximal pour le chargement de la page.
+	Integer (secondes)
+	Ajuster pour les pages complexes ou lentes afin d'éviter les timeouts 524.25
+	9
+	token_budget
+	Limite le nombre maximal de tokens utilisés pour la requête.
+	Integer
+	Gérer les coûts, en particulier avec ReaderLM-v2.
+	9
+	use_reader_lm_v2
+	Utilise le modèle ReaderLM-v2 pour une conversion HTML vers Markdown de haute qualité.
+	Boolean (true)
+	Améliore la qualité pour les sites complexes, mais coûte 3x plus de tokens. À utiliser pour les pages de détail critiques.
+	9
+	css_selector_only / X-Target-Selector
+	Liste de sélecteurs CSS pour cibler des éléments spécifiques. Le contenu retourné sera limité à ces éléments.
+	String (sélecteur CSS)
+	Indispensable pour extraire des champs spécifiques (titre, description, salaire) des pages d'offres d'emploi, en ignorant le contenu périphérique.
+	3
+	css_selector_wait_for / X-Wait-For-Selector
+	Sélecteurs CSS pour attendre le rendu d'éléments avant de retourner le résultat.
+	String (sélecteur CSS)
+	Assure que le contenu dynamique est entièrement chargé avant l'extraction. Utile pour les pages d'offres d'emploi avec chargement asynchrone.
+	3
+	css_selector_excluding
+	Sélecteurs CSS pour les éléments à supprimer (en-têtes, pieds de page, etc.).
+	String (sélecteur CSS)
+	Nettoyer davantage le contenu en supprimant les éléments non pertinents qui pourraient subsister.
+	9
+	remove_all_images
+	Supprime toutes les images de la réponse.
+	Boolean
+	Peut être activé si les images ne sont pas pertinentes pour l'extraction des offres.
+	9
+	viewport_config (Corps POST)
+	Définit les dimensions du viewport du navigateur pour le rendu.
+	JSON ({"width": 1920, "height": 1080})
+	Simuler différentes résolutions d'écran pour le rendu, utile si le site a un comportement réactif spécifique.
+	9
+	forward_cookie / X-Set-Cookie
+	Transmet des paramètres de cookies personnalisés à l'API.
+	String (<name>=<value>; domain=<domain>)
+	Pour les pages nécessitant une authentification simple ou des préférences. Les requêtes avec cookies ne sont pas mises en cache.
+	3
+	image_caption / X-With-Generated-Alt
+	Active le sous-titrage automatique des images par un VLM.
+	Boolean (true)
+	Utile si la compréhension des images (logos d'entreprise, graphiques dans les descriptions de poste) est pertinente pour les LLM.
+	3
+	use_proxy_server / X-Proxy-Url
+	Utilise un serveur proxy spécifié pour accéder à l'URL.
+	String (URL du proxy)
+	Pour accéder à des pages géorestreintes ou contourner des blocages spécifiques.
+	3
+	country_specific_proxy_server
+	Définit un code de pays pour un serveur proxy basé sur la localisation.
+	String (code pays, ex: 'US', 'auto', 'none')
+	Pour les sites d'offres d'emploi qui affichent du contenu différent selon la localisation géographique.
+	9
+	bypass_cached_content / X-No-Cache
+	Ignore le contenu mis en cache et récupère directement l'URL.
+	Boolean (true)
+	Assure la récupération des informations les plus récentes, car le cache par défaut est de 5 minutes.14
+	3
+	do_not_cache_track
+	Empêche la mise en cache et le suivi de l'URL sur le serveur Jina.
+	Boolean (true)
+	Pour des raisons de confidentialité ou si le contenu est très volatil.
+	9
+	stream_mode / Accept: text/event-stream
+	Active le mode de streaming pour les pages volumineuses ou dynamiques.
+	Boolean (true) / Header
+	Bénéfique pour les pages très longues ou celles qui se chargent progressivement, permettant un rendu plus complet.
+	3
+	customize_browser_locale
+	Contrôle la locale du navigateur pour le rendu de la page.
+	String (code locale, ex: 'fr-FR')
+	Utile si les sites d'offres d'emploi affichent du contenu ou des formats spécifiques à une locale.
+	9
+	strictly_comply_robots_policy
+	Définit un User-Agent de bot pour vérifier robots.txt.
+	Boolean (true)
+	Respecte les directives robots.txt du site cible.
+	9
+	iframe_extraction
+	Traite le contenu de toutes les iframes intégrées.
+	Boolean (true)
+	Essentiel si des informations clés (ex: formulaires de candidature, vidéos) sont encapsulées dans des iframes.
+	9
+	shadow_dom_extraction
+	Extrait le contenu de tous les Shadow DOMs.
+	Boolean (true)
+	Crucial pour les sites utilisant des composants web modernes qui encapsulent du contenu dans des Shadow DOMs.
+	9
+	follow_redirect
+	Résout l'URL vers la destination finale après les redirections.
+	Boolean (true)
+	Assure que le contenu est extrait de la page finale après une série de redirections (301, 302).
+	9
+	pre_run_javascript (Corps POST)
+	Exécute du code JavaScript avant le rendu.
+	String (code JS ou URL)
+	Permet de manipuler la page (ex: supprimer des pop-ups, accepter des cookies) avant l'extraction.
+	9
+	content_format
+	Contrôle le niveau de détail de la réponse.
+	String (ex: 'default', 'raw')
+	Permet d'ajuster la verbosité du Markdown généré.
+	9
+	gather_all_links_at_the_end
+	Ajoute une section "Boutons & Liens" à la fin du Markdown.
+	Boolean (true)
+	Utile pour l'agrégation si les liens secondaires (ex: "postuler", "en savoir plus") sont importants.
+	9
+	gather_all_images_at_the_end
+	Ajoute une section "Images" à la fin du Markdown.
+	Boolean (true)
+	Fournit une vue d'ensemble des visuels pour les LLM.
+	9
+	github_flavored_markdown
+	Active/désactive les fonctionnalités GFM.
+	Boolean (true)
+	Personnalise le style du Markdown.
+	9
+	heading_style, bullet_point_style, emphasis_style, strong_emphasis_style, link_style
+	Personnalise le formatage Markdown.
+	String
+	Permet d'uniformiser le style Markdown pour une meilleure consommation par les LLM.
+	9
+	local_pdf_html_file (Corps POST)
+	Permet de traiter des fichiers PDF/HTML locaux.
+	Fichier (upload)
+	Non pertinent pour le scraping d'URLs, mais utile pour des analyses hors ligne.
+	9
+	browser_engine
+	Choisit le moteur de navigateur pour le rendu.
+	String (ex: 'Default')
+	Affecte la qualité et la vitesse. Les valeurs spécifiques ne sont pas détaillées dans la documentation explorée, mais l'option existe.
+	6
+	
+
+3.3. En-têtes (Headers)
+
+
+Les en-têtes HTTP jouent un rôle crucial dans la configuration des requêtes envoyées à Jina Reader, permettant de contrôler le format de la réponse, l'authentification, la gestion des cookies et d'autres comportements avancés.
+* Authorization: Bearer YOUR_API_KEY: Cet en-tête est fondamental pour authentifier vos requêtes et accéder aux limites de débit supérieures. Sans une clé API valide, les requêtes sont soumises à des restrictions beaucoup plus strictes.5
+* Accept: Cet en-tête détermine le format de la réponse souhaitée :
+   * application/json: Demande une réponse JSON, qui inclut généralement l'URL, le titre, le contenu et un horodatage. Pour le mode "Search" (s.jina.ai), cela renvoie une liste de cinq résultats, chacun avec ces champs.3
+   * text/markdown: Le format par défaut, renvoie le contenu propre en Markdown.3
+   * text/event-stream: Active le mode de streaming. Dans ce mode, Jina Reader attend plus longtemps que la page soit rendue de manière stable et renvoie les données par morceaux (chunks), le dernier morceau contenant l'information la plus complète et finale. Cela est particulièrement utile pour les pages volumineuses ou très dynamiques.3
+* User-Agent: Bien que l'API Jina Reader utilise ses propres navigateurs headless pour accéder aux URLs cibles (ce qui implique qu'elle gère ses propres User-Agent sortants pour éviter la détection par les sites web 1), l'en-tête
+User-Agent envoyé par votre client Python à l'API Jina Reader n'affecte généralement pas la manière dont Jina Reader interagit avec la page cible. Il est néanmoins recommandé d'utiliser un User-Agent standard pour vos requêtes vers Jina Reader.
+* X-With-Generated-Alt: true: Active la fonction de sous-titrage d'images. Jina Reader utilise un modèle de langage visuel (VLM) pour générer des légendes pour les images sans balise alt, les formatant comme !(Image [idx]: [VLM_caption]). Cela fournit aux LLM des indices contextuels sur les images.3
+* X-Set-Cookie: Permet de transmettre des paramètres de cookies personnalisés à Jina Reader pour la requête sortante vers l'URL cible. Ceci est utile pour accéder à des pages qui nécessitent une authentification supplémentaire ou des sessions spécifiques. Il est important de noter que les requêtes utilisant cet en-tête ne seront pas mises en cache par Jina Reader.3
+* X-Respond-With: Cet en-tête permet de contourner le traitement readability de Jina Reader et de spécifier un format de sortie plus brut :
+   * markdown: Renvoie le contenu en Markdown sans passer par le filtre readability.
+   * html: Renvoie le documentElement.outerHTML de la page web.
+   * text: Renvoie le document.body.innerText de la page web.
+   * screenshot: Renvoie l'URL d'une capture d'écran de la page web.3
+   * X-Proxy-Url: Permet de spécifier un serveur proxy que Jina Reader doit utiliser pour accéder à l'URL cible. Ceci est utile si la page cible n'est accessible que via des proxies spécifiques ou pour des besoins de géolocalisation.3
+   * X-Cache-Tolerance / X-No-Cache: true: Contrôlent le comportement de la mise en cache. Jina Reader met en cache le contenu des URLs pendant une certaine durée (par défaut 5 minutes 14).
+   * X-Cache-Tolerance: Accepte une valeur entière en secondes pour personnaliser la durée de vie du cache.
+   * X-No-Cache: true: Force l'API à ignorer le cache et à récupérer le contenu directement de l'URL cible, équivalent à X-Cache-Tolerance: 0.3
+   * X-Target-Selector / X-Wait-For-Selector: Bien que listés comme paramètres d'URL, ils peuvent également être passés comme en-têtes.3 Leur fonction est détaillée dans la section des paramètres d'URL.
+   * X-Timeout: Lorsqu'il est spécifié explicitement, Jina Reader attendra que le réseau soit inactif jusqu'à ce que le délai d'attente soit atteint, au lieu de retourner le résultat plus tôt. Utile pour les pages qui se stabilisent après un certain temps.3
+   * X-Base: Utilisé pour indiquer à l'API de suivre la chaîne complète de redirections pour atteindre l'URL finale.15
+
+
+3.4. Format de la Réponse
+
+
+La manière dont Jina Reader structure ses réponses est cruciale pour l'intégration en aval, notamment pour l'extraction de données par les LLM.
+
+
+Réponse en Cas de Succès (Code HTTP 200 OK)
+
+
+En cas de succès, l'API Jina Reader renvoie le contenu de la page web traitée dans le format spécifié par l'en-tête Accept de la requête.
+   * Markdown (par défaut ou Accept: text/markdown):
+   * C'est le format privilégié de Jina Reader, conçu pour être "LLM-friendly".1 Le Markdown est propre, bien structuré et contient le contenu principal de la page, débarrassé des éléments perturbateurs. La qualité du Markdown est un facteur clé pour l'efficacité des LLM en aval, car un contenu pré-nettoyé et structuré réduit la complexité de l'ingénierie des prompts et améliore la précision de l'extraction. Jina Reader utilise des techniques avancées, y compris son modèle ReaderLM-v2, pour assurer cette qualité, même sur des sites web complexes.9
+   * JSON (Accept: application/json):
+   * Lorsque cet en-tête est spécifié, la réponse est un objet JSON contenant des champs structurés. Pour le mode "Reader" (r.jina.ai), la réponse JSON inclut généralement l'URL de la page, son titre, le contenu extrait et un horodatage.3 Pour le mode "Search" (s.jina.ai), la réponse JSON est une liste de cinq entrées, chacune structurée de la même manière avec
+title, content et url.3 Ce format est particulièrement utile lorsque des métadonnées structurées sont nécessaires en plus du contenu textuel.
+      * Streaming (Accept: text/event-stream):
+      * Pour les pages web très volumineuses ou celles qui chargent leur contenu de manière progressive (par exemple, avec un défilement infini), le mode streaming est avantageux. Il permet à Jina Reader de renvoyer le contenu par morceaux au fur et à mesure qu'il est rendu et stabilisé. Le dernier morceau de données est censé être le plus complet.3
+      * Autres Formats via X-Respond-With:
+      * Comme mentionné précédemment, l'en-tête X-Respond-With permet d'obtenir des formats plus bruts pour des cas d'utilisation spécifiques : html (le DOM complet), text (le innerText du corps), ou screenshot (une URL vers une capture d'écran).3
+
+
+Réponse en Cas d'Erreur
+
+
+La gestion robuste des erreurs est fondamentale pour un système de scraping fiable. Jina Reader utilise les codes de statut HTTP standard pour indiquer la nature des problèmes rencontrés. Comprendre ces codes et les messages d'erreur associés permet de mettre en place des logiques de nouvelle tentative, des alertes ou des mécanismes de fallback appropriés.
+      * Codes de Statut HTTP Standard:
+      * 2xx (Succès): 200 OK indique que la requête a été traitée avec succès.28
+      * 4xx (Erreurs Client): Ces codes indiquent que le problème provient de la requête du client.
+      * 400 Bad Request: La requête est mal formée ou contient des paramètres invalides.28
+      * 401 Unauthorized: Les informations d'authentification (clé API) sont invalides ou manquantes.28
+      * 403 Forbidden: La requête est valide, mais le serveur refuse l'accès au contenu. Cela peut se produire si le site cible bloque l'accès de Jina Reader.28
+      * 404 Not Found: La ressource demandée (l'URL cible) n'existe pas.28
+      * 405 Method Not Allowed: La méthode HTTP utilisée n'est pas supportée pour cette ressource.28
+      * 429 Too Many Requests: La limite de débit a été dépassée. C'est un code courant si la clé API n'est pas utilisée ou si le volume de requêtes est trop élevé.28
+      * 5xx (Erreurs Serveur): Ces codes indiquent un problème côté serveur Jina Reader.
+      * 500 Internal Server Error: Une erreur interne inattendue s'est produite sur le serveur Jina Reader.28
+      * 502 Bad Gateway: Le serveur Jina Reader, agissant comme une passerelle, a reçu une réponse invalide d'un serveur en amont (par exemple, le site cible).28
+      * 503 Service Unavailable: Le service Jina Reader n'est pas prêt à traiter la requête, souvent dû à une surcharge ou une maintenance.28
+      * 504 Gateway Timeout: Le serveur Jina Reader n'a pas reçu de réponse en temps voulu du site cible. Cela peut être lié à des pages très lentes ou à des problèmes de réseau entre Jina et le site cible.28 Des erreurs
+524 timeout sont également mentionnées, notamment si le mode streaming est désactivé sur des pages complexes.25
+         * Messages d'Erreur Spécifiques:
+         * En plus des codes de statut, Jina Reader peut retourner des messages d'erreur dans le corps de la réponse, souvent au format JSON, fournissant des détails supplémentaires sur la cause de l'échec. Par exemple, des messages peuvent indiquer des problèmes de vérification humaine lors de la génération de la clé API 14, ou des informations sur le dépassement du budget de tokens.9
+         * Il est important de noter que Jina AI s'efforce de fournir une réponse, même en cas de dépassement de budget de tokens pour certaines de ses APIs (comme DeepSearch), mais cela peut ne pas être le cas pour Reader API.17
+La compréhension approfondie de ces codes et messages est essentielle pour construire une logique de gestion des erreurs robuste. Cela permet au système d'agrégation d'offres d'emploi de distinguer les erreurs transitoires (qui peuvent être retentées, comme les 503 ou 504) des erreurs permanentes (qui nécessitent une intervention, comme les 404 ou 403), optimisant ainsi la fiabilité et l'efficacité du processus de scraping.
+
+
+4. Stratégies d'Implémentation en Python
+
+
+Pour un agrégateur d'offres d'emploi, l'implémentation Python doit être résiliente, performante et bien instrumentée. Cette section détaille les stratégies clés pour y parvenir.
+
+
+4.1. Gestion des Erreurs
+
+
+La gestion des erreurs est primordiale pour garantir la robustesse du système de scraping. Les requêtes réseau peuvent échouer pour diverses raisons (problèmes de connexion, timeouts, erreurs côté serveur ou client). Une fonction d'appel API robuste doit encapsuler ces requêtes et gérer les exceptions de manière appropriée.
+
+
+Python
+
+
+
+
+import requests
+import os
+import time
+import json
+import logging
+
+# Configuration basique du logging pour l'exemple
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+# Il est recommandé de stocker votre clé API dans une variable d'environnement.
+JINA_API_KEY = os.getenv("JINA_API_KEY") 
+
+def call_jina_reader_robust(
+   target_url: str, 
+   api_key: str = JINA_API_KEY, 
+   json_format: bool = True, 
+   max_retries: int = 3, 
+   initial_backoff: float = 1.0
+) -> dict | str | None:
+   """
+   Appelle l'API Jina Reader avec une gestion robuste des erreurs et des nouvelles tentatives.
+   
+   Args:
+       target_url: L'URL de la page à scraper.
+       api_key: Votre clé API Jina AI.
+       json_format: Si True, demande une sortie JSON ; sinon, Markdown.
+       max_retries: Nombre maximal de tentatives en cas d'erreur transitoire.
+       initial_backoff: Délai initial en secondes avant la première nouvelle tentative.
+       
+   Returns:
+       Le contenu scrapé ou None en cas d'échec persistant.
+   """
+   base_url = "https://r.jina.ai/"
+   jina_url = f"{base_url}{target_url}"
+   
+   headers = {}
+   if api_key:
+       headers["Authorization"] = f"Bearer {api_key}"
+   if json_format:
+       headers["Accept"] = "application/json"
+   else:
+       headers["Accept"] = "text/markdown"
+
+   for attempt in range(max_retries):
+       try:
+           logger.info(f"Tentative {attempt + 1}/{max_retries} de récupération de {target_url}")
+           response = requests.get(jina_url, headers=headers, timeout=60) # Augmenter le timeout pour la robustesse
+           response.raise_for_status() # Lève HTTPError pour les codes 4xx/5xx
+           
+           if json_format:
+               return response.json()
+           else:
+               return response.text
+               
+       except requests.exceptions.HTTPError as http_err:
+           status_code = http_err.response.status_code
+           logger.warning(f"Erreur HTTP ({status_code}) pour {target_url}: {http_err}")
+           
+           if status_code == 429: # Too Many Requests
+               logger.error(f"Limite de débit atteinte pour {target_url}. Attente prolongée.")
+               # Implémenter une logique d'attente spécifique ou lever une erreur non retentable
+               # Ici, on laisse l'exponential backoff gérer, mais une attente plus longue peut être nécessaire.
+           elif status_code in : # Erreurs non retentables
+               logger.error(f"Erreur non retentable ({status_code}) pour {target_url}. Abandon.")
+               return None
+           elif status_code >= 500: # Erreurs serveur, potentiellement transitoires
+               logger.warning(f"Erreur serveur ({status_code}) pour {target_url}. Nouvelle tentative...")
+           
+           # Tente de récupérer les détails de l'erreur du corps de la réponse
+           try:
+               error_details = http_err.response.json()
+               logger.debug(f"Détails de l'erreur: {json.dumps(error_details, indent=2)}")
+           except json.JSONDecodeError:
+               logger.debug(f"Corps de la réponse d'erreur (non-JSON): {http_err.response.text[:200]}...")
+
+       except requests.exceptions.ConnectionError as conn_err:
+           logger.warning(f"Erreur de connexion pour {target_url}: {conn_err}. Nouvelle tentative...")
+       except requests.exceptions.Timeout as timeout_err:
+           logger.warning(f"Délai d'attente dépassé pour {target_url}: {timeout_err}. Nouvelle tentative...")
+       except requests.exceptions.RequestException as req_err:
+           logger.error(f"Erreur inattendue lors de la récupération de {target_url}: {req_err}. Abandon.")
+           return None
+       
+       # Délai exponentiel avant la nouvelle tentative
+       if attempt < max_retries - 1:
+           sleep_time = initial_backoff * (2 ** attempt) + (time.random() * 0.5) # Ajout de jitter
+           logger.info(f"Attente de {sleep_time:.2f} secondes avant la prochaine tentative pour {target_url}.")
+           time.sleep(sleep_time)
+
+   logger.error(f"Échec de la récupération de {target_url} après {max_retries} tentatives.")
+   return None
+
+if __name__ == "__main__":
+   test_urls =
+
+   for url in test_urls:
+       print(f"\n--- Test de l'URL: {url} ---")
+       content = call_jina_reader_robust(url, json_format=True)
+       if content:
+           print(f"Contenu récupéré (partiel): {str(content)[:150]}...")
+       else:
+           print("Aucun contenu récupéré.")
+
+
+Cette fonction call_jina_reader_robust met en œuvre plusieurs principes de gestion d'erreurs :
+         * Encapsulation des requêtes: Toutes les interactions avec l'API Jina Reader sont gérées au sein d'un bloc try...except.
+         * Gestion des exceptions spécifiques: Elle capture différents types d'exceptions requests (HTTPError, ConnectionError, Timeout, RequestException) pour réagir de manière différenciée.28
+         * response.raise_for_status(): Cette méthode est essentielle pour convertir les codes de statut HTTP d'erreur (4xx ou 5xx) en exceptions Python, permettant une gestion structurée.28
+         * Nouvelles tentatives (Retries) avec délai exponentiel: Pour les erreurs transitoires (comme les problèmes de connexion, les timeouts, ou les erreurs serveur 5xx), la fonction tente de nouveau la requête après un délai croissant. L'ajout d'un "jitter" (un petit délai aléatoire) aide à éviter les "thundering herds" si de nombreux clients retentent en même temps.32
+         * Distinction des erreurs retentables et non retentables: Les erreurs client (401, 403, 404, 405) sont considérées comme non retentables car elles indiquent un problème permanent avec la requête elle-même ou les permissions, et les nouvelles tentatives seraient inutiles.30 Les erreurs
+429 Too Many Requests nécessitent une attention particulière et peuvent déclencher une attente plus longue ou une mise en file d'attente.
+         * Logging détaillé: Chaque tentative et type d'erreur est enregistré, fournissant un historique clair des problèmes rencontrés.
+
+
+4.2. Traitement en Parallèle
+
+
+Pour un agrégateur d'offres d'emploi qui doit scraper de nombreuses URLs, le traitement séquentiel est inefficace. L'utilisation de asyncio et aiohttp en Python est la meilleure approche pour effectuer des requêtes HTTP en parallèle, car ces bibliothèques sont conçues pour des opérations d'E/S non bloquantes.18
+Cependant, le traitement parallèle doit être géré avec soin pour respecter les limites de débit de l'API Jina Reader (200 RPM avec clé API gratuite, 5000 RPM premium pour l'API Reader 14) et éviter de surcharger le service. L'utilisation d'un
+asyncio.Semaphore est une méthode efficace pour limiter le nombre de requêtes concurrentes, tandis que des bibliothèques comme aiolimiter peuvent contrôler le taux global de requêtes par unité de temps.19
+Le contrôle de la concurrence est essentiel pour optimiser le débit sans déclencher les mécanismes anti-abus de l'API. En limitant le nombre de requêtes simultanées, le système maintient un comportement prévisible et stable, ce qui est crucial pour la fiabilité à long terme du processus de scraping. Cela permet au projet d'atteindre un volume élevé de données collectées tout en restant dans les limites d'utilisation autorisées.
+
+
+Python
+
+
+
+
+import asyncio
+import aiohttp
+import time
+import logging
+from aiolimiter import AsyncLimiter # Pour le contrôle du taux global
+import json
+import os
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+JINA_API_KEY = os.getenv("JINA_API_KEY") 
+
+# Configuration des limites
+MAX_CONCURRENT_REQUESTS = 10 # Limite le nombre de requêtes simultanées
+RATE_LIMIT_PER_MINUTE = 200 # RPM pour une clé API gratuite (ou 500/5000 pour payant/premium)
+# aiolimiter fonctionne en appels par période, donc RPM / 60 secondes
+RATE_LIMIT_PER_SECOND = RATE_LIMIT_PER_MINUTE / 60 
+
+# Initialisation du limiteur de débit global
+rate_limiter = AsyncLimiter(RATE_LIMIT_PER_SECOND, 1.0) # X appels par seconde
+
+async def fetch_jina_reader_content_async(
+   session: aiohttp.ClientSession, 
+   target_url: str, 
+   api_key: str = JINA_API_KEY, 
+   json_format: bool = True,
+   max_retries: int = 3,
+   initial_backoff: float = 1.0
+) -> dict | str | None:
+   """
+   Récupère le contenu d'une URL en utilisant l'API Jina Reader de manière asynchrone,
+   avec gestion des erreurs et des nouvelles tentatives.
+   """
+   base_url = "https://r.jina.ai/"
+   jina_url = f"{base_url}{target_url}"
+   
+   headers = {}
+   if api_key:
+       headers["Authorization"] = f"Bearer {api_key}"
+   if json_format:
+       headers["Accept"] = "application/json"
+   else:
+       headers["Accept"] = "text/markdown"
+
+   for attempt in range(max_retries):
+       try:
+           async with rate_limiter: # Applique la limite de débit globale
+               logger.info(f"Async Tentative {attempt + 1}/{max_retries} de récupération de {target_url}")
+               async with session.get(jina_url, headers=headers, timeout=aiohttp.ClientTimeout(total=60)) as response:
+                   response.raise_for_status()
+                   
+                   if json_format:
+                       return await response.json()
+                   else:
+                       return await response.text()
+                       
+       except aiohttp.ClientResponseError as http_err:
+           status_code = http_err.status
+           logger.warning(f"Async Erreur HTTP ({status_code}) pour {target_url}: {http_err}")
+           if status_code == 429:
+               logger.error(f"Async Limite de débit atteinte pour {target_url}. Attente prolongée.")
+               # Une attente plus longue ou un mécanisme de file d'attente prioritaire pourrait être implémenté ici
+           elif status_code in :
+               logger.error(f"Async Erreur non retentable ({status_code}) pour {target_url}. Abandon.")
+               return None
+           elif status_code >= 500:
+               logger.warning(f"Async Erreur serveur ({status_code}) pour {target_url}. Nouvelle tentative...")
+           
+           try:
+               error_details = await http_err.response.json()
+               logger.debug(f"Async Détails de l'erreur: {json.dumps(error_details, indent=2)}")
+           except (json.JSONDecodeError, AttributeError):
+               logger.debug(f"Async Corps de la réponse d'erreur (non-JSON): {await http_err.response.text()[:200]}...")
+
+       except aiohttp.ClientConnectorError as conn_err:
+           logger.warning(f"Async Erreur de connexion pour {target_url}: {conn_err}. Nouvelle tentative...")
+       except asyncio.TimeoutError as timeout_err:
+           logger.warning(f"Async Délai d'attente dépassé pour {target_url}: {timeout_err}. Nouvelle tentative...")
+       except Exception as e:
+           logger.error(f"Async Erreur inattendue lors de la récupération de {target_url}: {e}. Abandon.")
+           return None
+       
+       if attempt < max_retries - 1:
+           sleep_time = initial_backoff * (2 ** attempt) + (time.random() * 0.5)
+           logger.info(f"Async Attente de {sleep_time:.2f} secondes avant la prochaine tentative pour {target_url}.")
+           await asyncio.sleep(sleep_time)
+
+   logger.error(f"Async Échec de la récupération de {target_url} après {max_retries} tentatives.")
+   return None
+
+async def scrape_urls_in_parallel(urls: list[str]):
+   """
+   Scrape une liste d'URLs en parallèle en utilisant aiohttp et asyncio.Semaphore
+   pour limiter la concurrence, et aiolimiter pour le débit global.
+   """
+   # Utilisation de aiohttp.TCPConnector pour limiter les connexions simultanées par session
+   # Ceci est une autre forme de limitation de concurrence, utile si on a plusieurs sessions
+   # ou si on veut limiter les connexions par hôte. Ici, on l'applique à la session globale.
+   connector = aiohttp.TCPConnector(limit=MAX_CONCURRENT_REQUESTS) 
+   
+   async with aiohttp.ClientSession(connector=connector) as session:
+       tasks =
+       for url in urls:
+           task = asyncio.create_task(fetch_jina_reader_content_async(session, url))
+           tasks.append(task)
+       
+       results = await asyncio.gather(*tasks, return_exceptions=True) # Retourne les exceptions au lieu de planter
+
+       processed_results =
+       for i, result in enumerate(results):
+           url = urls[i]
+           if isinstance(result, Exception):
+               logger.error(f"Une exception non gérée s'est produite pour {url}: {result}")
+               processed_results.append({"url": url, "content": None, "error": str(result)})
+           else:
+               processed_results.append({"url": url, "content": result})
+       
+       return processed_results
+
+if __name__ == "__main__":
+   # Exemple d'URLs à scraper (remplacez par vos URLs d'offres d'emploi)
+   example_job_urls =
+
+   start_time = time.monotonic()
+   # Exécute la fonction asynchrone
+   all_results = asyncio.run(scrape_urls_in_parallel(example_job_urls))
+   end_time = time.monotonic()
+
+   print(f"\n--- Résultats du scraping parallèle ({len(all_results)} URLs) ---")
+   for res in all_results:
+       url = res["url"]
+       if res.get("error"):
+           print(f"URL: {url} - Échec: {res['error']}")
+       else:
+           content_preview = str(res["content"])[:100].replace('\n', ' ')
+           print(f"URL: {url} - Succès (aperçu): {content_preview}...")
+   
+   print(f"\nTemps total écoulé pour {len(example_job_urls)} URLs: {end_time - start_time:.2f} secondes")
+
+
+Ce code illustre l'utilisation de aiohttp pour les requêtes asynchrones et aiolimiter pour le contrôle du débit.
+            * aiohttp.ClientSession: Gère la session HTTP, y compris les pools de connexions, ce qui est plus efficace que de créer une nouvelle connexion pour chaque requête.18
+            * aiohttp.TCPConnector(limit=MAX_CONCURRENT_REQUESTS): Limite le nombre total de connexions TCP simultanées, contrôlant ainsi la concurrence au niveau du réseau.19
+            * AsyncLimiter: De aiolimiter, permet de définir une limite de requêtes par seconde (ou par période), garantissant que le taux global de requêtes ne dépasse pas le quota de l'API Jina Reader.19 Chaque appel à
+async with rate_limiter: suspendra l'exécution de la coroutine si la limite de débit est atteinte, jusqu'à ce qu'une nouvelle "autorisation" soit disponible.
+            * asyncio.gather: Exécute plusieurs coroutines (tâches de scraping) en parallèle et attend que toutes soient terminées. L'option return_exceptions=True est cruciale pour que le programme ne s'arrête pas à la première exception, mais collecte plutôt toutes les erreurs.18
+            * Gestion des erreurs asynchrones: La fonction fetch_jina_reader_content_async adapte la logique de gestion des erreurs aux exceptions spécifiques de aiohttp (ClientResponseError, ClientConnectorError, asyncio.TimeoutError).
+
+
+4.3. Logging
+
+
+Un système de logging bien conçu est indispensable pour le suivi, le débogage et l'analyse des performances d'un agrégateur d'offres d'emploi. Il permet de comprendre ce qui se passe dans le système, d'identifier les goulots d'étranglement, de diagnostiquer les erreurs et de surveiller l'utilisation de l'API.
+Recommandations pour le Logging en Python:
+               * Utiliser des loggers nommés: Éviter le logger racine par défaut (logging.basicConfig) pour une meilleure granularité et un contrôle indépendant des flux de logs. Créer des loggers spécifiques pour les modules ou les fonctionnalités (par exemple, logger = logging.getLogger(__name__)).35
+               * Niveaux de log appropriés: Utiliser les niveaux de log standard (DEBUG, INFO, WARNING, ERROR, CRITICAL) pour catégoriser les messages par importance et gravité.35
+               * INFO: Pour les opérations réussies (URL scrapée, latence).
+               * WARNING: Pour les problèmes potentiels (redirections, contenu incomplet).
+               * ERROR: Pour les échecs de requêtes (codes 4xx/5xx non retentables).
+               * CRITICAL: Pour les échecs système majeurs.
+               * Logs structurés (JSON): Pour faciliter l'analyse par des outils de gestion de logs centralisés (ELK Stack, Grafana Loki), formatez les logs en JSON. Cela rend les messages facilement interrogeables et parsables.36
+               * Informations contextuelles: Inclure des données pertinentes dans chaque message de log, telles que l'URL cible, le code de statut HTTP, la latence de la requête, l'ID de la tâche (si applicable), et tout message d'erreur spécifique.35
+               * Rotation des fichiers de log: Empêcher les fichiers de log de croître indéfiniment en configurant une rotation basée sur la taille ou le temps. Cela aide à la gestion de l'espace disque et à la performance.35
+               * Gestion gracieuse des exceptions: Toujours loguer les exceptions avec le traceback complet pour faciliter le débogage.35
+               * Éviter les informations sensibles: Ne jamais loguer de données sensibles comme les clés API, les informations d'identification ou les données personnelles des utilisateurs.35
+
+
+Python
+
+
+
+
+# Exemple de configuration de logging plus avancée
+import logging
+import logging.handlers
+import json
+
+def setup_logging():
+   # Créer un logger nommé
+   logger = logging.getLogger("jina_scraper")
+   logger.setLevel(logging.INFO)
+   logger.propagate = False # Empêche la propagation au logger racine
+
+   # Handler pour la console
+   console_handler = logging.StreamHandler()
+   console_handler.setLevel(logging.INFO)
+   
+   # Handler pour les fichiers de log avec rotation
+   # Les logs seront sauvegardés dans 'scraper.log', max 10MB, 5 fichiers de backup
+   file_handler = logging.handlers.RotatingFileHandler(
+       'scraper.log', maxBytes=10*1024*1024, backupCount=5
+   )
+   file_handler.setLevel(logging.INFO)
+
+   # Formatter pour la console (lisible)
+   formatter_console = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+   console_handler.setFormatter(formatter_console)
+
+   # Formatter pour les fichiers (JSON structuré)
+   class JsonFormatter(logging.Formatter):
+       def format(self, record):
+           log_record = {
+               "timestamp": self.formatTime(record, self.datefmt),
+               "logger_name": record.name,
+               "level": record.levelname,
+               "message": record.getMessage(),
+               "file": record.filename,
+               "line": record.lineno,
+           }
+           # Ajouter des attributs personnalisés si présents dans le record
+           if hasattr(record, 'url'):
+               log_record['url'] = record.url
+           if hasattr(record, 'status_code'):
+               log_record['status_code'] = record.status_code
+           if hasattr(record, 'latency'):
+               log_record['latency'] = record.latency
+           if record.exc_info:
+               log_record['exception'] = self.formatException(record.exc_info)
+           return json.dumps(log_record)
+
+   formatter_json = JsonFormatter()
+   file_handler.setFormatter(formatter_json)
+
+   # Ajouter les handlers au logger
+   logger.addHandler(console_handler)
+   logger.addHandler(file_handler)
+   
+   return logger
+
+# Utilisation dans le code (à appeler une seule fois au démarrage de l'application)
+# scraper_logger = setup_logging()
+
+# Exemple d'utilisation dans une fonction de scraping:
+# scraper_logger.info("Requête envoyée", extra={'url': target_url})
+# scraper_logger.error("Échec de la requête", extra={'url': target_url, 'status_code': response.status_code})
+# scraper_logger.info("Requête réussie", extra={'url': target_url, 'latency': latency_ms})
+
+L'intégration d'un tel système de logging permet non seulement de suivre l'exécution du programme, mais aussi de collecter des métriques précieuses sur la performance de l'API Jina Reader (latence moyenne, taux de succès/échec) et de détecter rapidement les anomalies ou les blocages.
+
+
+5. Pièges à Éviter et Meilleures Pratiques
+
+
+L'intégration de Jina Reader, bien que simplifiant de nombreux aspects du scraping, présente des défis spécifiques et des opportunités d'optimisation.
+               * Dépassement des Limites de Débit (Rate Limits):
+               * Piège: Ne pas utiliser de clé API ou sous-estimer les limites de débit. Le niveau gratuit sans clé est très restrictif (20 RPM par IP), entraînant des blocages rapides et des erreurs 429 Too Many Requests.1
+               * Meilleure Pratique: Toujours utiliser une clé API Jina AI. Implémenter une logique de nouvelle tentative avec un délai exponentiel et un jitter pour les erreurs 429 et les erreurs serveur (5xx).19 Pour le traitement parallèle, utiliser
+asyncio.Semaphore pour limiter la concurrence et aiolimiter pour contrôler le débit global. Cela garantit une utilisation efficace de votre quota sans surcharger l'API.
+                  * Gestion du Contenu Dynamique et du Rendu:
+                  * Piège: Supposer que Jina Reader échoue sur des pages JavaScript complexes sans explorer ses fonctionnalités avancées.
+                  * Meilleure Pratique: Jina Reader est conçu pour gérer le contenu dynamique via son moteur de rendu headless.1 Pour les cas particulièrement difficiles (par exemple, contenu qui apparaît après un certain délai ou une interaction), utiliser les en-têtes
+X-Wait-For-Selector ou activer le stream_mode (Accept: text/event-stream) pour donner plus de temps au rendu de la page.3
+                     * Systèmes Anti-Bot (Cloudflare, etc.):
+                     * Piège: Tenter d'implémenter des solutions de contournement anti-bot côté client.
+                     * Meilleure Pratique: Jina Reader agit comme une couche d'abstraction robuste qui gère la plupart des défis anti-bot en arrière-plan. Son infrastructure sur Google Cloud Run, utilisant des instances de Chrome headless et des mécanismes de mise à l'échelle, est intrinsèquement plus résiliente aux détections de bots que le scraping direct.1 Si des problèmes de blocage persistent pour des sites spécifiques, l'utilisation des options de proxy de Jina Reader (
+X-Proxy-Url, country_specific_proxy_server) peut être envisagée.3
+                        * Murs de Connexion (Login Walls):
+                        * Piège: Tenter de scraper des pages nécessitant une authentification via Jina Reader.
+                        * Meilleure Pratique: Jina Reader ne peut pas accéder au contenu derrière des murs de connexion.14 Pour les sites d'offres d'emploi qui exigent une connexion, il faudra explorer des stratégies alternatives, telles que l'utilisation directe des APIs officielles du site (si disponibles), ou la gestion manuelle de la connexion suivie de la transmission des cookies via l'en-tête
+X-Set-Cookie de Jina Reader, à condition que cela soit conforme aux conditions d'utilisation du site et techniquement faisable.3
+                           * Qualité du Contenu Markdown:
+                           * Piège: Supposer que le Markdown sera toujours parfait pour tous les sites.
+                           * Meilleure Pratique: Bien que Jina Reader produise généralement un Markdown de haute qualité, il est recommandé de toujours valider la sortie pour les sites clés. Utiliser les sélecteurs CSS (X-Target-Selector, X-Excluding-Selector) pour affiner l'extraction et cibler précisément les éléments pertinents de l'offre d'emploi.3 Pour les sites avec des structures particulièrement complexes, l'expérimentation avec
+use_reader_lm_v2 peut améliorer la qualité de la conversion HTML vers Markdown, malgré un coût en tokens plus élevé.9
+                              * Gestion du Cache:
+                              * Piège: Ne pas être conscient du mécanisme de cache de Jina Reader.
+                              * Meilleure Pratique: Jina Reader met en cache le contenu des URLs pendant environ 5 minutes.14 Pour s'assurer de toujours récupérer les données les plus fraîches (par exemple, pour les mises à jour fréquentes d'offres d'emploi), utiliser l'en-tête
+X-No-Cache: true ou le paramètre bypass_cached_content.3
+                                 * Encodage des URLs:
+                                 * Piège: Oublier d'encoder correctement les URLs, en particulier pour le mode "Search" (s.jina.ai) ou les paramètres d'URL complexes.
+                                 * Meilleure Pratique: Toujours s'assurer que les parties de l'URL qui peuvent contenir des caractères spéciaux (comme les requêtes de recherche) sont correctement encodées en URL (urllib.parse.quote en Python).3
+                                 * Optimisation des Coûts:
+                                 * Piège: Utiliser des fonctionnalités coûteuses sans nécessité.
+                                 * Meilleure Pratique: Surveiller l'utilisation des tokens. La fonction use_reader_lm_v2 coûte 3 fois plus de tokens.9 Utiliser les sélecteurs CSS (
+X-Target-Selector) pour limiter la quantité de contenu traité et donc le nombre de tokens générés, réduisant ainsi les coûts et améliorant la pertinence pour les LLM.
+                                    * Redirections HTTP:
+                                    * Piège: Ne pas gérer les redirections, ce qui peut entraîner la récupération d'un contenu inattendu.
+                                    * Meilleure Pratique: S'assurer que le paramètre follow_redirect est activé si le système doit toujours résoudre l'URL vers sa destination finale après une série de redirections (301, 302).9
+
+
+6. Annexe : Liens et Ressources
+
+
+Cette section fournit une liste de liens directs vers la documentation officielle, les articles, les discussions et les exemples de code les plus pertinents qui ont servi de base à cette documentation.
+
+
+Documentation Officielle et Dépôts GitHub
+
+
+                                    * Jina AI Reader Documentation (Airbyte Connector): https://docs.airbyte.com/integrations/sources/jina-ai-reader 5
+                                    * Jina AI Reader Documentation (Deepset Haystack Connector): https://docs.haystack.deepset.ai/docs/jinareaderconnector 6
+                                    * Jina AI Reader GitHub Repository: https://github.com/jina-ai/reader 3
+                                    * Jina AI API Dashboard (Interactive Snippet Builder): https://jina.ai/api-dashboard/ 14
+                                    * Jina AI Reader Product Page: https://jina.ai/reader/ 14
+                                    * Jina AI (Main Website): https://jina.ai/ 9
+                                    * Jina AI API Pricing & Rate Limits: https://jina.ai/contact-sales/ (Not direct pricing page, but contains rate limit tables) 17
+                                    * Jina AI Login & Token Management: https://jina.ai/serve/jina-ai-cloud/login/ 22
+                                    * Jina AI DeepSearch (related error codes): https://jina.ai/deepsearch/ 25
+                                    * ReaderLM-v2 Hugging Face Model Card:(https://huggingface.co/jinaai/ReaderLM-v2) 24
+
+
+Articles de Blog et Guides Pratiques
+
+
+                                    * Jina AI Reader - Simon Willison's Weblog: https://simonwillison.net/2024/Jun/16/jina-ai-reader/ 1
+                                    * Jina AI Reader API: A Comprehensive Guide (aidemos.com): https://aidemos.com/tools/jina-ai-reader-api 2
+                                    * Jina AI Reader Tool Can Read PDF Files (Medium): https://braintitan.medium.com/jina-ai-reader-tool-can-read-pdf-files-from-any-url-and-quickly-parse-them-into-text-d154b6990373 10
+                                    * How Jina AI Built Its Web Grounding System with Cloud Run (Google Cloud Blog): https://cloud.google.com/blog/products/application-development/how-jina-ai-built-its-100-billion-token-web-grounding-system-with-cloud-run-gpus 11
+                                    * Mastering Dynamic Web Scraping (HackerNoon): https://hackernoon.com/mastering-dynamic-web-scraping 7
+                                    * HTTPX vs Requests vs AIOHTTP (Oxylabs Blog): https://oxylabs.io/blog/httpx-vs-requests-vs-aiohttp 18
+                                    * Python AIOHTTP Rate Limit (copdips.com): https://copdips.com/2023/01/python-aiohttp-rate-limit.html 19
+                                    * Python Logging Best Practices (Signoz): https://signoz.io/guides/python-logging-best-practices/ 35
+                                    * Python Logging Best Practices (Betterstack): https://betterstack.com/community/guides/logging/python/python-logging-best-practices/ 36
+                                    * Anti-bot: What is it and How to Get Around (Medium): https://medium.com/@datajournal/anti-bot-f4d61098e5ab 12
+
+
+Discussions sur les Forums et Stack Overflow
+
+
+                                    * Stack Overflow (Tag Jina): https://stackoverflow.com/questions/tagged/jina 41
+                                    * Aiohttp: rate limiting parallel requests (Stack Overflow): https://stackoverflow.com/questions/48682147/aiohttp-rate-limiting-parallel-requests 34
+                                    * How to change the client informations in the request header (User-Agent) (Stack Overflow): https://stackoverflow.com/questions/31630965/how-to-change-the-client-informations-in-the-request-header-user-agent 42
+                                    * Reddit (r/n8n) - AI-powered job scraping bot: https://www.reddit.com/r/n8n/comments/1kzn42f/i_built_an_aipowered_job_scraping_bot_that/ 43
+                                    * Reddit (r/mcp) - JinaAI Reader Server: https://www.reddit.com/r/mcp/comments/1i46lyn/mcp_jinaai_reader_server_integrates_jinaais/ 44
+                                    * Reddit (n8n.io) - Jina AI and Reddit integration: https://n8n.io/integrations/jina-ai/and/reddit/ 45
+
+
+Autres Références Techniques
+
+
+                                    * HTTP Status Codes - REST API Tutorial: https://restfulapi.net/http-status-codes/ 28
+                                    * Cloudflare Browser Rendering & Jina Reader Integration (Pipedream): https://pipedream.com/apps/cloudflare-browser-rendering/integrations/jina-reader 46
+                                    * Transient Errors - Jina Documentation: https://jina.ai/serve/concepts/client/transient-errors/ 32
+                                    * Handle Exceptions - Jina Documentation: https://jina.ai/serve/concepts/orchestration/handle-exceptions/ 31
+                                    * HTTP Status Code when database user is blocked (Stack Overflow): https://stackoverflow.com/questions/54332268/rest-http-status-code-when-database-user-is-blocked 30
+                                    * Cloudflare Bypass Methods (ZenRows Blog): https://www.zenrows.com/blog/bypass-cloudflare 37
+
+
+Conclusions et Recommandations
+
+
+L'analyse approfondie de l'API Jina Reader confirme qu'elle est une solution particulièrement bien adaptée et puissante pour le projet d'agrégation d'offres d'emploi. Sa capacité à transformer des URLs complexes en un contenu Markdown ou JSON propre et structuré, directement consommable par les LLM, représente un gain significatif en termes de développement et de maintenance.
+La décision de déléguer l'intégralité de la couche d'accès au contenu web à Jina Reader est stratégiquement solide. Elle permet à l'équipe de se concentrer sur l'optimisation de l'extraction de données par LLM, qui est le cœur de métier du projet, plutôt que de s'enliser dans les complexités et les coûts liés à la gestion d'une infrastructure de scraping interne. Jina Reader agit comme une passerelle intelligente, capable de naviguer dans le web moderne, y compris les sites riches en JavaScript et les protections anti-bot, grâce à son utilisation de navigateurs headless et à son architecture cloud scalable.
+Recommandations Clés pour l'Implémentation :
+                                    1. Prioriser l'Acquisition et la Gestion de la Clé API : Une clé API Jina AI est indispensable pour atteindre les débits nécessaires à un agrégateur d'offres d'emploi à grande échelle. Il est recommandé d'obtenir au minimum une clé API gratuite pour les tests et de prévoir l'acquisition d'un plan payant ou premium pour la production afin de bénéficier de limites de requêtes plus élevées (jusqu'à 5000 RPM pour l'API Reader). La clé doit être gérée via des variables d'environnement pour des raisons de sécurité.
+                                    2. Adopter le Traitement Parallèle Asynchrone : Utiliser asyncio et aiohttp est la méthode la plus efficace pour traiter un grand volume d'URLs. Mettre en place des mécanismes de contrôle de concurrence (comme asyncio.Semaphore) et de débit (comme aiolimiter) est crucial pour respecter les limites de l'API et éviter les blocages.
+                                    3. Implémenter une Gestion Robuste des Erreurs : Construire des fonctions d'appel API qui intègrent des mécanismes de nouvelles tentatives avec délai exponentiel pour les erreurs transitoires (connexion, timeout, erreurs 5xx, 429). Distinguer clairement les erreurs retentables des erreurs non retentables (401, 403, 404) pour éviter les boucles infinies et optimiser la résilience.
+                                    4. Exploiter les Paramètres Avancés pour la Précision : Utiliser les paramètres d'URL et les en-têtes HTTP de Jina Reader, notamment les sélecteurs CSS (X-Target-Selector, X-Wait-For-Selector, X-Excluding-Selector), pour cibler précisément les informations pertinentes sur les pages d'offres d'emploi. Cela améliore la qualité de l'extraction et réduit le volume de données à traiter par les LLM.
+                                    5. Surveiller la Qualité du Contenu et Optimiser les Coûts : Bien que le Markdown soit généralement de bonne qualité, des vérifications régulières sont conseillées. Pour les pages particulièrement complexes, l'expérimentation avec use_reader_lm_v2 peut être envisagée, en gardant à l'esprit son coût en tokens plus élevé. L'utilisation ciblée des sélecteurs CSS peut également aider à réduire la consommation de tokens en limitant le contenu extrait.
+                                    6. Mettre en Place un Logging Complet : Un système de logging structuré (idéalement en JSON) avec des niveaux de log appropriés et des informations contextuelles est essentiel pour le suivi des performances, le débogage et la détection proactive des problèmes.
+                                    7. Anticiper les Limites Inhérentes : Jina Reader ne gère pas les murs de connexion. Pour les sites d'offres d'emploi qui exigent une authentification, des solutions alternatives devront être explorées en dehors de Jina Reader, ou des stratégies de contournement basées sur la transmission de cookies devront être étudiées avec prudence et conformité.
+En suivant ces recommandations, le projet pourra tirer pleinement parti de la puissance de Jina Reader, assurant une collecte de données web efficace et fiable, et permettant à l'équipe de se concentrer sur l'optimisation de l'extraction d'informations clés via les LLM.
+Sources des citations
+                                    1. Jina AI Reader - Simon Willison's Weblog, consulté le juillet 17, 2025, https://simonwillison.net/2024/Jun/16/jina-ai-reader/
+                                    2. Jina AI Reader API Demo | Streamline Web Content Extraction for LLMs, consulté le juillet 17, 2025, https://aidemos.com/tools/jina-ai-reader-api
+                                    3. jina-ai/reader: Convert any URL to an LLM-friendly input with a simple prefix https://r.jina.ai - GitHub, consulté le juillet 17, 2025, https://github.com/jina-ai/reader
+                                    4. How to Scrape Website for LLM? Best 3 Services to Scrape - ScrapingAPI.ai, consulté le juillet 17, 2025, https://scrapingapi.ai/blog/how-to-scrape-website-for-llm
+                                    5. Jina AI Reader Connector | Airbyte Documentation, consulté le juillet 17, 2025, https://docs.airbyte.com/integrations/sources/jina-ai-reader
+                                    6. JinaReaderConnector - Haystack Documentation - Deepset, consulté le juillet 17, 2025, https://docs.haystack.deepset.ai/docs/jinareaderconnector
+                                    7. Mastering Dynamic Web Scraping | HackerNoon, consulté le juillet 17, 2025, https://hackernoon.com/mastering-dynamic-web-scraping
+                                    8. Web scraping with GPT-4o: powerful but expensive - Hacker News, consulté le juillet 17, 2025, https://news.ycombinator.com/item?id=41428274
+                                    9. Jina AI - Your Search Foundation, Supercharged., consulté le juillet 17, 2025, https://jina.ai/
+                                    10. Jina AI Reader tool can read PDF files from any URL and quickly parse them into text, consulté le juillet 17, 2025, https://braintitan.medium.com/jina-ai-reader-tool-can-read-pdf-files-from-any-url-and-quickly-parse-them-into-text-d154b6990373
+                                    11. How Jina AI built its 100-billion-token web grounding system with Cloud Run GPUs, consulté le juillet 17, 2025, https://cloud.google.com/blog/products/application-development/how-jina-ai-built-its-100-billion-token-web-grounding-system-with-cloud-run-gpus
+                                    12. Anti-bot: What is it and How to Get Around - Medium, consulté le juillet 17, 2025, https://medium.com/@datajournal/anti-bot-f4d61098e5ab
+                                    13. Bypassing Sophisticated Anti-Bot Systems - YouTube, consulté le juillet 17, 2025, https://www.youtube.com/watch?v=97gDm-z7DUU
+                                    14. Reader API - Jina AI, consulté le juillet 17, 2025, https://jina.ai/reader/
+                                    15. meta-prompt/v6.txt at main · jina-ai/meta-prompt - GitHub, consulté le juillet 17, 2025, https://github.com/jina-ai/meta-prompt/blob/main/v6.txt
+                                    16. Embedding API - Jina AI, consulté le juillet 17, 2025, https://jina.ai/embeddings/
+                                    17. Contact sales - Jina AI, consulté le juillet 17, 2025, https://jina.ai/contact-sales/
+                                    18. HTTPX vs Requests vs AIOHTTP - Oxylabs, consulté le juillet 17, 2025, https://oxylabs.io/blog/httpx-vs-requests-vs-aiohttp
+                                    19. Python aiohttp rate limit - A code to remember - Copdips.com, consulté le juillet 17, 2025, https://copdips.com/2023/01/python-aiohttp-rate-limit.html
+                                    20. Jina Search Foundation API - Jina AI, consulté le juillet 17, 2025, https://jina.ai/api-dashboard/
+                                    21. Is Jina AI's Reader API available on Make? - Custom Apps - Make Community, consulté le juillet 17, 2025, https://community.make.com/t/is-jina-ai-s-reader-api-available-on-make/48026
+                                    22. Login & Token Management - Jina 3.27.17 documentation, consulté le juillet 17, 2025, https://jina.ai/serve/jina-ai-cloud/login/
+                                    23. Jina API Support · open-webui open-webui · Discussion #6854 - GitHub, consulté le juillet 17, 2025, https://github.com/open-webui/open-webui/discussions/6854
+                                    24. jinaai/ReaderLM-v2 - Hugging Face, consulté le juillet 17, 2025, https://huggingface.co/jinaai/ReaderLM-v2
+                                    25. DeepSearch - Jina AI, consulté le juillet 17, 2025, https://jina.ai/deepsearch/
+                                    26. Convert URL To LLM-Friendly Input with Jina Reader API on New Render Completed from Plainly API - Pipedream, consulté le juillet 17, 2025, https://pipedream.com/apps/plainly/integrations/jina-reader/convert-url-to-llm-friendly-input-with-jina-reader-api-on-new-render-completed-from-plainly-api-int_rDsVXM49
+                                    27. Jina Reader for Search Grounding to Improve Factuality of LLMs, consulté le juillet 17, 2025, https://jina.ai/news/jina-reader-for-search-grounding-to-improve-factuality-of-llms/
+                                    28. HTTP Status Codes - REST API Tutorial, consulté le juillet 17, 2025, https://restfulapi.net/http-status-codes/
+                                    29. API Error and Response Codes - Marigold, consulté le juillet 17, 2025, https://getstarted.meetmarigold.com/engagebysailthru/Content/developers/api-basics/responses.html
+                                    30. REST HTTP status code when database user is blocked - Stack Overflow, consulté le juillet 17, 2025, https://stackoverflow.com/questions/54332268/rest-http-status-code-when-database-user-is-blocked
+                                    31. Handle Exceptions - Jina 3.27.17 documentation, consulté le juillet 17, 2025, https://jina.ai/serve/concepts/orchestration/handle-exceptions/
+                                    32. Transient Errors - Jina 3.27.17 documentation, consulté le juillet 17, 2025, https://jina.ai/serve/concepts/client/transient-errors/
+                                    33. Client Quickstart — aiohttp 3.12.14 documentation, consulté le juillet 17, 2025, http://docs.aiohttp.org/en/stable/client_quickstart.html
+                                    34. aiohttp: rate limiting parallel requests - python - Stack Overflow, consulté le juillet 17, 2025, https://stackoverflow.com/questions/48682147/aiohttp-rate-limiting-parallel-requests
+                                    35. Python Logging Best Practices - Expert Tips with Practical Examples - SigNoz, consulté le juillet 17, 2025, https://signoz.io/guides/python-logging-best-practices/
+                                    36. 10 Best Practices for Logging in Python | Better Stack Community, consulté le juillet 17, 2025, https://betterstack.com/community/guides/logging/python/python-logging-best-practices/
+                                    37. How to Bypass Cloudflare in 2025: The 9 Best Methods - ZenRows, consulté le juillet 17, 2025, https://www.zenrows.com/blog/bypass-cloudflare
+                                    38. Simon Willison on jina, consulté le juillet 17, 2025, https://simonwillison.net/tags/jina/
+                                    39. airbyte/docs/integrations/sources/jina-ai-reader.md at master - GitHub, consulté le juillet 17, 2025, https://github.com/airbytehq/airbyte/blob/master/docs/integrations/sources/jina-ai-reader.md
+                                    40. Trying Out Jina AI's node-DeepResearch | by tossy - Medium, consulté le juillet 17, 2025, https://medium.com/@tossy21/trying-out-jina-ais-node-deepresearch-c5b55d630ea6
+                                    41. Newest 'jina' Questions - Stack Overflow, consulté le juillet 17, 2025, https://stackoverflow.com/questions/tagged/jina
+                                    42. How to change the client informations in the request header (User-Agent)? - Stack Overflow, consulté le juillet 17, 2025, https://stackoverflow.com/questions/31630965/how-to-change-the-client-informations-in-the-request-header-user-agent
+                                    43. I Built an AI-Powered Job Scraping Bot That Actually Works (Step-by-Step Guide) - Reddit, consulté le juillet 17, 2025, https://www.reddit.com/r/n8n/comments/1kzn42f/i_built_an_aipowered_job_scraping_bot_that/
+                                    44. MCP JinaAI Reader Server – Integrates Jina.ai's Reader API with LLMs for efficient and structured web content extraction, optimized for documentation and web content analysis. : r/mcp - Reddit, consulté le juillet 17, 2025, https://www.reddit.com/r/mcp/comments/1i46lyn/mcp_jinaai_reader_server_integrates_jinaais/
+                                    45. Jina AI and Reddit: Automate Workflows with n8n, consulté le juillet 17, 2025, https://n8n.io/integrations/jina-ai/and/reddit/
+                                    46. Integrate the Cloudflare Browser Rendering API with the Jina Reader API - Pipedream, consulté le juillet 17, 2025, https://pipedream.com/apps/cloudflare-browser-rendering/integrations/jina-reader
