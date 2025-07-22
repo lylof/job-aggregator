@@ -1,8 +1,23 @@
-"""Configuration for Togo job sources with site-specific parameters."""
+"""
+DEPRECATED: This module is deprecated and will be removed in a future version.
+Please use the new configuration architecture in the `config` package instead.
+"""
 
+import warnings
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 from enum import Enum
+
+# Import the new configuration architecture
+from jinascraper.config import SourceRegistry, SourceBaseConfig, SourceType
+
+# Show deprecation warning
+warnings.warn(
+    "The `sources_config.py` module is deprecated and will be removed in a future version. "
+    "Please use the new configuration architecture in the `config` package instead.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 
 class SourceType(str, Enum):
@@ -90,12 +105,12 @@ class TogoJobSources:
         "anpe_togo": SourceConfig(
             name="ANPE Togo",
             base_url="https://anpetogo.org",
-            listing_url="https://anpetogo.org/espace-chercheur-d-emploi/nos-offres-demplois/",
+            listing_url="https://anpetogo.org/espace-chercheur-d-emploi/nos-offres-demplois",  # Sans slash final
             source_type=SourceType.GOVERNMENT,
             css_selector_jobs=".jobsearch-joblisting-classic-wrap h2 a",
             css_selector_exclude="header, footer, .menu-principal, .sidebar",
             max_pages=50,  # Government site with many offers
-            expected_jobs_per_page=25,
+            expected_jobs_per_page=15,  # Basé sur les tests récents
             reliability_score=0.95,  # High reliability for government source
             request_delay=1.0
         ),
@@ -142,18 +157,66 @@ class TogoJobSources:
     @classmethod
     def get_source(cls, source_name: str) -> Optional[SourceConfig]:
         """Get configuration for a specific source."""
+        # Try to get from new architecture first
+        new_config = SourceRegistry.get_source(source_name)
+        if new_config:
+            # Convert to old format for backward compatibility
+            return SourceConfig(
+                name=new_config.name,
+                base_url=new_config.base_url,
+                listing_url=new_config.listing_url,
+                source_type=SourceType(new_config.source_type.value),
+                css_selector_jobs=new_config.css_selector_jobs,
+                pagination_pattern=new_config.pagination_pattern,
+                max_pages=new_config.max_pages,
+                css_selector_exclude=new_config.css_selector_exclude,
+                use_reader_lm=new_config.use_reader_lm,
+                request_delay=new_config.request_delay,
+                requires_headers=new_config.requires_headers,
+                custom_headers=new_config.custom_headers,
+                expected_jobs_per_page=new_config.expected_jobs_per_page,
+                reliability_score=new_config.reliability_score,
+                disabled=new_config.disabled
+            )
+        
+        # Fall back to old format
         return cls.SOURCES.get(source_name)
     
     @classmethod
     def get_all_sources(cls) -> Dict[str, SourceConfig]:
         """Get all source configurations."""
-        return cls.SOURCES.copy()
+        # Merge old and new sources
+        sources = cls.SOURCES.copy()
+        
+        # Add sources from new architecture
+        for source_id, new_config in SourceRegistry.get_all_sources().items():
+            if source_id not in sources:
+                # Convert to old format
+                sources[source_id] = SourceConfig(
+                    name=new_config.name,
+                    base_url=new_config.base_url,
+                    listing_url=new_config.listing_url,
+                    source_type=SourceType(new_config.source_type.value),
+                    css_selector_jobs=new_config.css_selector_jobs,
+                    pagination_pattern=new_config.pagination_pattern,
+                    max_pages=new_config.max_pages,
+                    css_selector_exclude=new_config.css_selector_exclude,
+                    use_reader_lm=new_config.use_reader_lm,
+                    request_delay=new_config.request_delay,
+                    requires_headers=new_config.requires_headers,
+                    custom_headers=new_config.custom_headers,
+                    expected_jobs_per_page=new_config.expected_jobs_per_page,
+                    reliability_score=new_config.reliability_score,
+                    disabled=new_config.disabled
+                )
+        
+        return sources
     
     @classmethod
     def get_active_sources(cls) -> Dict[str, SourceConfig]:
         """Get only active (non-disabled) source configurations."""
         return {
-            name: config for name, config in cls.SOURCES.items()
+            name: config for name, config in cls.get_all_sources().items()
             if not getattr(config, 'disabled', False)
         }
     
@@ -161,7 +224,7 @@ class TogoJobSources:
     def get_sources_by_type(cls, source_type: SourceType) -> Dict[str, SourceConfig]:
         """Get sources filtered by type."""
         return {
-            name: config for name, config in cls.SOURCES.items()
+            name: config for name, config in cls.get_all_sources().items()
             if config.source_type == source_type
         }
     
@@ -169,8 +232,8 @@ class TogoJobSources:
     def get_priority_sources(cls) -> List[str]:
         """Get sources ordered by reliability score (highest first)."""
         return sorted(
-            cls.SOURCES.keys(),
-            key=lambda name: cls.SOURCES[name].reliability_score,
+            cls.get_all_sources().keys(),
+            key=lambda name: cls.get_all_sources()[name].reliability_score,
             reverse=True
         )
     
@@ -191,7 +254,7 @@ class TogoJobSources:
 # Convenience functions for common operations
 def get_togo_source_names() -> List[str]:
     """Get list of all Togo job source names."""
-    return list(TogoJobSources.SOURCES.keys())
+    return list(TogoJobSources.get_all_sources().keys())
 
 
 def get_government_sources() -> Dict[str, SourceConfig]:

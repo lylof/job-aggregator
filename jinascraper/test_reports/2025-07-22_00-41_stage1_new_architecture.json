@@ -1,0 +1,15 @@
+{
+  "timestamp": "2025-07-22T00:41:48.160231",
+  "sources_tested": 5,
+  "sources_successful": 0,
+  "total_urls": 0,
+  "results": {
+    "linkedin_togo": {
+      "source_id": "linkedin_togo",
+      "source_name": "LinkedIn Togo",
+      "success": false,
+      "error": "Request failed: Illegal header value b'Bearer '",
+      "urls": []
+    }
+  }
+}

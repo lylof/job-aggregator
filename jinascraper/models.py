@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, HttpUrl, validator
 class ExtractionMethod(str, Enum):
     """Methods used for job data extraction."""
     JINA = "jina"
+    GEMINI = "gemini"
     CRAWL4AI = "crawl4ai"
     MANUAL = "manual"
 

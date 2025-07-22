@@ -1,0 +1,28 @@
+{
+  "timestamp": "2025-07-22T00:54:41.477459",
+  "sources_tested": 5,
+  "sources_successful": 1,
+  "total_urls": 43,
+  "results": {
+    "linkedin_togo": {
+      "source_id": "linkedin_togo",
+      "source_name": "LinkedIn Togo",
+      "success": true,
+      "urls_count": 43,
+      "raw_urls_count": 43,
+      "duration_seconds": 71.409314,
+      "urls": [
+        "https://tg.linkedin.com/jobs/view/bookkeeper-at-itm-tanzania-limited-4263121797?refId=tK7rlEjPdff2qbERxvnI5A==&trackingId=I10AGP/AbenPum6iYOUXhg==)[Assistante",
+        "https://tg.linkedin.com/jobs/view/assistante-administrative-at-itm-tanzania-limited-4263122633?refId=tK7rlEjPdff2qbERxvnI5A==&trackingId=r4krgn mJ3mx7hKiI6fCQA==)[Assistant(e",
+        "https://tg.linkedin.com/jobs/view/assistant-e-projet-at-etg-4270028059?refId=tK7rlEjPdff2qbERxvnI5A==&trackingId=3EXgoxqEqqfZrPwKaWvLYw==)[Hr",
+        "https://tg.linkedin.com/jobs/view/hr-assistant-hr-generalist-at-itm-tanzania-limited-4263126439?refId=tK7rlEjPdff2qbERxvnI5A==&trackingId=tnvYvxrde7 5h/ek/Ui//g==)[Tutor](https://tg.linkedin.com/jobs/view/tutor-at-filo-4262206329?position=5",
+        "https://tg.linkedin.com/jobs/view/mamprusi-linguistic-projects-remote-at-sigma-ai-3948405214?refId=tK7rlEjPdff2qbERxvnI5A==&trackingId=o1MlbvqXEPFh8GYKmwb5BA==)[Responsable",
+        "https://tg.linkedin.com/jobs/view/responsable-suivi-et-evaluation-m-e-officer-at-etg-4270022954?refId=tK7rlEjPdff2qbERxvnI5A==&trackingId=0qVuuoqGiYMpi4e3aWqOZg==)[Dagbani",
+        "https://tg.linkedin.com/jobs/view/dagbani-linguistic-projects-remote-sigma-ai-at-sigma-ai-3938976954?refId=tK7rlEjPdff2qbERxvnI5A==&trackingId=yFiTeDZp9vd0itVU4T8QKA==)[DI2",
+        "https://tg.linkedin.com/jobs/view/postes-de-commerciaux-at-cabinet-jurisconsult-4259864929?refId=tK7rlEjPdff2qbERxvnI5A==&trackingId=NTmkTyEFFv5IqNhf7/YG7A==)[Finance",
+        "https://tg.linkedin.com/jobs/view/finance-accountant-at-etg-4270023990?refId=tK7rlEjPdff2qbERxvnI5A==&trackingId=xvCX97S/4u3hq/GkdVOMAg==)[Remote",
+        "https://tg.linkedin.com/jobs/view/remote-accountant-at-pearl-lemon-group-4250673377?refId=tK7rlEjPdff2qbERxvnI5A==&trackingId=ws1q IndKPWl4GO 3zsB7A==)[PLANT"
+      ]
+    }
+  }
+}

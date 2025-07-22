@@ -8,5 +8,9 @@ This service extracts job postings from Togolese job sites using:
 - Supabase for data storage
 """
 
+from .core.orchestrator import ScrapingOrchestrator
+from .models import JobOffer, ScrapingResult, ExtractionMethod
+
 __version__ = "1.0.0"
 __author__ = "Job Aggregator Team"
+__all__ = ["ScrapingOrchestrator", "JobOffer", "ScrapingResult", "ExtractionMethod"]
