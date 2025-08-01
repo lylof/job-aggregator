@@ -45,6 +45,9 @@ class ScrapingOrchestrator:
             cache_manager: Service for cache management
             database_service: Service for database operations
         """
+        # Enhanced logger for beautiful output
+        self.enhanced_logger = None
+        
         # Use dependency injection or create default services
         from .interfaces import service_container
         from .service_adapters import (
@@ -72,6 +75,10 @@ class ScrapingOrchestrator:
         
         # Initialize plugins
         asyncio.create_task(self._initialize_plugins())
+    
+    def set_enhanced_logger(self, enhanced_logger):
+        """Set the enhanced logger for beautiful output."""
+        self.enhanced_logger = enhanced_logger
     
     async def __aenter__(self):
         """Async context manager entry."""
@@ -115,9 +122,13 @@ class ScrapingOrchestrator:
             logger.error(f"Plugin initialization failed: {str(e)}")
     
     @performance_tracked("orchestrator.full_cycle")
-    async def run_full_cycle(self) -> ScrapingResult:
+    async def run_full_cycle(self, sources_filter: Optional[List[str]] = None) -> ScrapingResult:
         """
         Execute a complete scraping cycle: Stage 1 → Stage 2 → Storage.
+        
+        Args:
+            sources_filter: Optional list of source names to process.
+                          If None, processes all active sources.
         
         Returns:
             ScrapingResult with metrics and status
@@ -129,9 +140,15 @@ class ScrapingOrchestrator:
         
         try:
             # Stage 1: Exploration - Discover job URLs
-            stage1_result = await self.run_stage1_exploration()
+            if self.enhanced_logger:
+                self.enhanced_logger.print_header("ÉTAPE 1 - EXPLORATION D'URLS", "🔍")
+            
+            stage1_result = await self.run_stage1_exploration(sources_filter)
             
             # Stage 2: Analysis - Extract and structure job data
+            if self.enhanced_logger:
+                self.enhanced_logger.print_header("ÉTAPE 2 - EXTRACTION DE DONNÉES", "💾")
+            
             stage2_result = await self.run_stage2_analysis(stage1_result["new_urls"])
             
             # Generate final metrics
@@ -169,20 +186,60 @@ class ScrapingOrchestrator:
             )
     
     @performance_tracked("orchestrator.stage1_exploration")
-    async def run_stage1_exploration(self) -> Dict[str, Any]:
+    async def run_stage1_exploration(self, sources_filter: Optional[List[str]] = None) -> Dict[str, Any]:
         """
-        Stage 1: Exploration - Extract job URLs from all configured sources.
+        Stage 1: Exploration - Extract job URLs from all configured sources or filtered sources.
+        
+        Args:
+            sources_filter: Optional list of source names to process.
+                          If None, processes all active sources.
         
         Returns:
             Dictionary with discovered URLs and metrics
         """
-        logger.info("Starting Stage 1: Exploration", cycle_id=self.current_cycle_id)
+        logger.info("Starting Stage 1: Exploration", cycle_id=self.current_cycle_id, sources_filter=sources_filter)
         stage1_start = time.time()
         
         # Get all active sources
-        sources = SourceRegistry.get_active_sources()
+        all_sources = SourceRegistry.get_active_sources()
         
-        # Extract URLs from all sources using content extractor
+        # ✅ CORRECTION: Apply source filtering
+        if sources_filter:
+            # Filter sources according to the provided list
+            sources = {
+                name: config for name, config in all_sources.items() 
+                if name in sources_filter
+            }
+            
+            # Check that all requested sources exist
+            missing_sources = set(sources_filter) - set(all_sources.keys())
+            if missing_sources:
+                logger.warning(
+                    "Some requested sources not found in active sources",
+                    missing_sources=list(missing_sources),
+                    available_sources=list(all_sources.keys())
+                )
+            
+            logger.info(
+                f"Source filtering applied: {len(sources)} sources selected out of {len(all_sources)}",
+                selected_sources=list(sources.keys())
+            )
+        else:
+            sources = all_sources
+            logger.info(f"No filtering applied: processing all {len(sources)} active sources")
+        
+        if not sources:
+            logger.warning("No sources to process after filtering")
+            return {
+                "discovered_urls_by_source": {},
+                "new_urls_by_source": {},
+                "new_urls": [],
+                "sources_processed": 0,
+                "total_urls_discovered": 0,
+                "processing_time_seconds": 0
+            }
+        
+        # Extract URLs from filtered sources using content extractor
         source_urls = await self._extract_urls_from_all_sources(sources)
         
         # Apply delta filtering using cache
@@ -191,7 +248,7 @@ class ScrapingOrchestrator:
         
         for source_name, urls in source_urls.items():
             if urls:
-                # Filter out already processed URLs
+                # Filter out already processed URLs using cache
                 new_urls = await self.cache_manager.filter_new_urls(urls, source_name)
                 new_urls_by_source[source_name] = new_urls
                 all_discovered_urls.extend(new_urls)
@@ -199,6 +256,15 @@ class ScrapingOrchestrator:
                 # Mark URLs as discovered in cache
                 for url in new_urls:
                     await self.cache_manager.mark_url_scraped(url, source_name)
+                
+                logger.info(
+                    "Delta filtering applied",
+                    source=source_name,
+                    total_urls=len(urls),
+                    new_urls=len(new_urls),
+                    filtered_out=len(urls) - len(new_urls),
+                    cache_hit_rate=f"{((len(urls) - len(new_urls)) / len(urls) * 100):.1f}%" if urls else "0%"
+                )
         
         stage1_time = time.time() - stage1_start
         
@@ -402,11 +468,11 @@ class ScrapingOrchestrator:
         if len(safe_urls) < len(job_urls):
             logger.warning(f"Filtered {len(job_urls) - len(safe_urls)} unsafe URLs from batch")
         
-        # Step 1: Extract content using Detail Scraper
-        jina_results = await self._extract_content_from_urls(safe_urls)
+        # Step 1: Extract content in dual format (raw_markdown + structured_json)
+        dual_format_results = await self._extract_content_from_urls(safe_urls)
         
-        # Step 2: Structure content using Gemini
-        structured_results = await self._structure_extracted_content(safe_urls, jina_results)
+        # Step 2: Process dual format results
+        structured_results = await self._structure_extracted_content(safe_urls, dual_format_results)
         
         # Step 3: Sanitize structured data
         sanitized_results = []
@@ -431,106 +497,142 @@ class ScrapingOrchestrator:
             job_urls: List of job URLs to process
             
         Returns:
-            List of extraction results (may include exceptions)
+            List of extraction results with {raw_markdown, structured_json} format
         """
         extraction_tasks = []
         for url in job_urls:
             source_site = self._determine_source_site(url)
-            task = self.content_extractor.extract_content(url, source_site=source_site)
+            task = self._extract_dual_format_content(url, source_site)
             extraction_tasks.append(task)
         
         # Execute content extractions concurrently
         return await asyncio.gather(*extraction_tasks, return_exceptions=True)
     
+    async def _extract_dual_format_content(self, url: str, source_site: str) -> Dict[str, Any]:
+        """
+        Extract content in dual format: raw markdown + structured JSON.
+        
+        Args:
+            url: Job URL to process
+            source_site: Source site identifier
+            
+        Returns:
+            Dictionary with raw_markdown and structured_json keys
+        """
+        try:
+            # Extract raw markdown content using Jina
+            raw_content = await self.content_extractor.extract_content(url, source_site=source_site)
+            
+            # Structure the content using Gemini
+            structured_content = None
+            if raw_content and raw_content.get("content"):
+                try:
+                    structured_content = await self.job_structurer.structure_job_data(
+                        raw_content["content"],
+                        url,
+                        source_site
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "Gemini structuring failed, using raw content only",
+                        url=url,
+                        error=str(e)
+                    )
+            
+            return {
+                "url": url,
+                "source_site": source_site,
+                "raw_markdown": raw_content.get("content", "") if raw_content else "",
+                "structured_json": structured_content,
+                "extraction_success": bool(raw_content and raw_content.get("content")),
+                "structuring_success": bool(structured_content)
+            }
+            
+        except Exception as e:
+            logger.error(
+                "Dual format extraction failed",
+                url=url,
+                source_site=source_site,
+                error=str(e)
+            )
+            return {
+                "url": url,
+                "source_site": source_site,
+                "raw_markdown": "",
+                "structured_json": None,
+                "extraction_success": False,
+                "structuring_success": False,
+                "error": str(e)
+            }
+    
     async def _structure_extracted_content(
         self, 
         job_urls: List[str], 
-        jina_results: List[Any]
+        dual_format_results: List[Any]
     ) -> List[Optional[Dict[str, Any]]]:
         """
-        Structure extracted content using Gemini AI.
+        Process dual format extraction results (raw_markdown + structured_json).
         
         Args:
             job_urls: Original job URLs
-            jina_results: Results from content extraction
+            dual_format_results: Results from dual format extraction
             
         Returns:
-            List of structured job data (None for failed extractions)
-        """
-        # Prepare Gemini tasks
-        gemini_tasks = self._prepare_gemini_tasks(job_urls, jina_results)
-        
-        # Execute Gemini structuring
-        return await self._execute_gemini_structuring(job_urls, gemini_tasks)
-    
-    def _prepare_gemini_tasks(self, job_urls: List[str], jina_results: List[Any]) -> List[Optional[Any]]:
-        """
-        Prepare Gemini structuring tasks from extraction results.
-        
-        Args:
-            job_urls: Original job URLs
-            jina_results: Results from content extraction
-            
-        Returns:
-            List of Gemini tasks (None for invalid extractions)
-        """
-        gemini_tasks = []
-        
-        for i, result in enumerate(jina_results):
-            if isinstance(result, Exception):
-                logger.error(
-                    "Jina extraction failed",
-                    url=job_urls[i],
-                    error=str(result)
-                )
-                gemini_tasks.append(None)
-            elif result and result.get("content"):
-                source_site = self._determine_source_site(job_urls[i])
-                task = self.job_structurer.structure_job_data(
-                    result["content"],
-                    job_urls[i],
-                    source_site
-                )
-                gemini_tasks.append(task)
-            else:
-                logger.warning("Empty content from Jina", url=job_urls[i])
-                gemini_tasks.append(None)
-        
-        return gemini_tasks
-    
-    async def _execute_gemini_structuring(
-        self, 
-        job_urls: List[str], 
-        gemini_tasks: List[Optional[Any]]
-    ) -> List[Optional[Dict[str, Any]]]:
-        """
-        Execute Gemini structuring tasks and handle errors.
-        
-        Args:
-            job_urls: Original job URLs
-            gemini_tasks: Prepared Gemini tasks
-            
-        Returns:
-            List of structured job data (None for failed extractions)
+            List of final job data with both formats (None for failed extractions)
         """
         structured_results = []
         
-        for i, task in enumerate(gemini_tasks):
-            if task is None:
+        for i, result in enumerate(dual_format_results):
+            if isinstance(result, Exception):
+                logger.error(
+                    "Dual format extraction failed",
+                    url=job_urls[i],
+                    error=str(result)
+                )
                 structured_results.append(None)
+            elif result and result.get("extraction_success"):
+                # Create final job data with both formats
+                final_job_data = {
+                    "url": result["url"],
+                    "source_site": result["source_site"],
+                    "raw_markdown": result["raw_markdown"],
+                    "structured_json": result["structured_json"],
+                    "extraction_method": "jina_gemini_dual",
+                    "extraction_success": result["extraction_success"],
+                    "structuring_success": result["structuring_success"],
+                    "processed_at": datetime.now().isoformat()
+                }
+                
+                # Add structured fields to top level for backward compatibility
+                if result["structured_json"]:
+                    structured_data = result["structured_json"]
+                    if isinstance(structured_data, dict):
+                        final_job_data.update({
+                            "title": structured_data.get("title", ""),
+                            "company": structured_data.get("company", ""),
+                            "location": structured_data.get("location", ""),
+                            "salary": structured_data.get("salary", ""),
+                            "job_type": structured_data.get("job_type", ""),
+                            "description": structured_data.get("description", "")
+                        })
+                
+                structured_results.append(final_job_data)
+                
+                logger.info(
+                    "Dual format processing completed",
+                    url=result["url"],
+                    extraction_success=result["extraction_success"],
+                    structuring_success=result["structuring_success"],
+                    raw_content_length=len(result["raw_markdown"]),
+                    has_structured_data=bool(result["structured_json"])
+                )
             else:
-                try:
-                    structured_data = await task
-                    structured_results.append(structured_data)
-                except Exception as e:
-                    logger.error(
-                        "Gemini structuring failed",
-                        url=job_urls[i],
-                        error=str(e)
-                    )
-                    structured_results.append(None)
+                logger.warning("Empty or failed extraction", url=job_urls[i])
+                structured_results.append(None)
         
         return structured_results
+    
+
     
     def _determine_source_site(self, url: str) -> str:
         """

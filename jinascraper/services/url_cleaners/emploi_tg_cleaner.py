@@ -1,6 +1,6 @@
 """URL cleaner for Emploi.tg job source."""
 
-from ...utils.type_helpers import List
+from typing import List
 from .base_cleaner import PatternBasedURLCleaner
 
 

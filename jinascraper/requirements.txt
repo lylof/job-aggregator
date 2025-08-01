@@ -15,6 +15,7 @@ google-generativeai>=0.3.0
 # Database and caching
 supabase>=2.0.0
 redis>=5.0.0
+fakeredis[json]>=2.20.0  # For development when Redis is not available
 asyncpg>=0.29.0
 prisma>=0.11.0
 prisma-client-py>=0.11.0

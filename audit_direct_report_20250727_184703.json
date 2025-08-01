@@ -1,0 +1,331 @@
+{
+  "timestamp": "2025-07-27T18:47:03.175790",
+  "tests": {
+    "file_structure": {
+      "status": "PASSED",
+      "details": {
+        "services/url_cleaners/emploitogo_info_cleaner.py": {
+          "exists": true,
+          "size": 2244,
+          "path": "C:\\Users\\Lylof\\CascadeProjects\\job-aggregator\\jinascraper\\services/url_cleaners/emploitogo_info_cleaner.py"
+        },
+        "services/url_cleaners/yop_lfrii_cleaner.py": {
+          "exists": true,
+          "size": 2313,
+          "path": "C:\\Users\\Lylof\\CascadeProjects\\job-aggregator\\jinascraper\\services/url_cleaners/yop_lfrii_cleaner.py"
+        },
+        "services/url_cleaners/linkedin_togo_cleaner.py": {
+          "exists": true,
+          "size": 2948,
+          "path": "C:\\Users\\Lylof\\CascadeProjects\\job-aggregator\\jinascraper\\services/url_cleaners/linkedin_togo_cleaner.py"
+        },
+        "services/url_cleaners/indeed_togo_cleaner.py": {
+          "exists": true,
+          "size": 2826,
+          "path": "C:\\Users\\Lylof\\CascadeProjects\\job-aggregator\\jinascraper\\services/url_cleaners/indeed_togo_cleaner.py"
+        },
+        "services/url_cleaners/emploi_tg_cleaner.py": {
+          "exists": true,
+          "size": 1410,
+          "path": "C:\\Users\\Lylof\\CascadeProjects\\job-aggregator\\jinascraper\\services/url_cleaners/emploi_tg_cleaner.py"
+        },
+        "services/url_cleaners/anpetogo_cleaner.py": {
+          "exists": true,
+          "size": 1943,
+          "path": "C:\\Users\\Lylof\\CascadeProjects\\job-aggregator\\jinascraper\\services/url_cleaners/anpetogo_cleaner.py"
+        },
+        "config/source_registry.py": {
+          "exists": true,
+          "size": 2966,
+          "path": "C:\\Users\\Lylof\\CascadeProjects\\job-aggregator\\jinascraper\\config/source_registry.py"
+        },
+        "core/orchestrator.py": {
+          "exists": true,
+          "size": 26871,
+          "path": "C:\\Users\\Lylof\\CascadeProjects\\job-aggregator\\jinascraper\\core/orchestrator.py"
+        },
+        "services/cache_manager.py": {
+          "exists": true,
+          "size": 16919,
+          "path": "C:\\Users\\Lylof\\CascadeProjects\\job-aggregator\\jinascraper\\services/cache_manager.py"
+        },
+        "services/jina_client.py": {
+          "exists": true,
+          "size": 9698,
+          "path": "C:\\Users\\Lylof\\CascadeProjects\\job-aggregator\\jinascraper\\services/jina_client.py"
+        },
+        "services/gemini_service.py": {
+          "exists": true,
+          "size": 31034,
+          "path": "C:\\Users\\Lylof\\CascadeProjects\\job-aggregator\\jinascraper\\services/gemini_service.py"
+        },
+        "models.py": {
+          "exists": true,
+          "size": 7262,
+          "path": "C:\\Users\\Lylof\\CascadeProjects\\job-aggregator\\jinascraper\\models.py"
+        },
+        "main.py": {
+          "exists": true,
+          "size": 6791,
+          "path": "C:\\Users\\Lylof\\CascadeProjects\\job-aggregator\\jinascraper\\main.py"
+        }
+      },
+      "error": null,
+      "timestamp": "2025-07-27T18:47:03.217791"
+    },
+    "import_patterns": {
+      "status": "FAILED",
+      "details": {
+        "services/url_cleaners/emploitogo_info_cleaner.py": {
+          "relative_imports": [],
+          "absolute_imports": [
+            "jinascraper.utils.type_helpers"
+          ],
+          "has_problematic_imports": false,
+          "content_length": 2157
+        },
+        "services/url_cleaners/yop_lfrii_cleaner.py": {
+          "relative_imports": [
+            "...utils.type_helpers"
+          ],
+          "absolute_imports": [],
+          "has_problematic_imports": true,
+          "content_length": 2222
+        },
+        "services/url_cleaners/linkedin_togo_cleaner.py": {
+          "relative_imports": [
+            "...utils.type_helpers"
+          ],
+          "absolute_imports": [],
+          "has_problematic_imports": true,
+          "content_length": 2845
+        },
+        "services/url_cleaners/indeed_togo_cleaner.py": {
+          "relative_imports": [
+            "...utils.type_helpers"
+          ],
+          "absolute_imports": [],
+          "has_problematic_imports": true,
+          "content_length": 2723
+        },
+        "services/url_cleaners/emploi_tg_cleaner.py": {
+          "relative_imports": [
+            "...utils.type_helpers"
+          ],
+          "absolute_imports": [],
+          "has_problematic_imports": true,
+          "content_length": 1359
+        },
+        "services/url_cleaners/anpetogo_cleaner.py": {
+          "relative_imports": [
+            "...utils.type_helpers"
+          ],
+          "absolute_imports": [],
+          "has_problematic_imports": true,
+          "content_length": 1877
+        }
+      },
+      "error": "Fichiers avec imports problématiques: ['services/url_cleaners/yop_lfrii_cleaner.py', 'services/url_cleaners/linkedin_togo_cleaner.py', 'services/url_cleaners/indeed_togo_cleaner.py', 'services/url_cleaners/emploi_tg_cleaner.py', 'services/url_cleaners/anpetogo_cleaner.py']",
+      "timestamp": "2025-07-27T18:47:03.259693"
+    },
+    "url_cleaner_functions": {
+      "status": "PASSED",
+      "details": {
+        "emploitogo_info": {
+          "file_exists": true,
+          "has_function": true,
+          "function_name": "clean_emploitogo_info_urls",
+          "regex_patterns": [
+            "[.,;:!?)\\\\]$",
+            "^/emploitogo/[^/]+/?$"
+          ],
+          "test_urls_count": 3,
+          "sample_test_url": "https://www.emploitogo.info/emploitogo/offre-demploi-togo-charge-de-communication/"
+        },
+        "yop_lfrii": {
+          "file_exists": true,
+          "has_function": true,
+          "function_name": "clean_yop_lfrii_urls",
+          "regex_patterns": [
+            "[.,;:!?)\\\\]$",
+            "/\\d{4}/\\d{2}/\\d{2}/[^/]+/$",
+            "^/emploi/[^/]+/?$"
+          ],
+          "test_urls_count": 3,
+          "sample_test_url": "https://yop.l-frii.com/emploi/coordinateur-projet-humanitaire/"
+        },
+        "emploi_tg": {
+          "file_exists": true,
+          "has_function": true,
+          "function_name": "clean_emploi_tg_urls",
+          "regex_patterns": [
+            "^/offre-emploi-togo/[^/]+(-\\d+)?/?$",
+            "^/offre-emploi/[^/]+(-\\d+)?/?$",
+            "^/node/\\d+/?$"
+          ],
+          "test_urls_count": 3,
+          "sample_test_url": "https://www.emploi.tg/offre-emploi-togo/developpeur-full-stack-lome/"
+        }
+      },
+      "error": null,
+      "timestamp": "2025-07-27T18:47:03.275497"
+    },
+    "configuration_files": {
+      "status": "PASSED",
+      "details": {
+        "config/sources/emploi_tg.py": {
+          "exists": true,
+          "size": 1890,
+          "has_stage2_params": false,
+          "has_source_config": true
+        },
+        "config/sources/anpetogo.py": {
+          "exists": true,
+          "size": 2089,
+          "has_stage2_params": false,
+          "has_source_config": true
+        },
+        "config/sources/linkedin_togo.py": {
+          "exists": true,
+          "size": 2125,
+          "has_stage2_params": false,
+          "has_source_config": true
+        },
+        "config/sources/indeed_togo.py": {
+          "exists": true,
+          "size": 1854,
+          "has_stage2_params": false,
+          "has_source_config": true
+        },
+        "config/sources/yop_lfrii.py": {
+          "exists": true,
+          "size": 1902,
+          "has_stage2_params": false,
+          "has_source_config": true
+        },
+        "config/sources/emploitogo_info.py": {
+          "exists": true,
+          "size": 1899,
+          "has_stage2_params": false,
+          "has_source_config": true
+        },
+        "config/base_config.py": {
+          "exists": true,
+          "size": 10255,
+          "has_stage2_params": false,
+          "has_source_config": true
+        },
+        "config/source_registry.py": {
+          "exists": true,
+          "size": 2871,
+          "has_stage2_params": false,
+          "has_source_config": true
+        }
+      },
+      "error": null,
+      "timestamp": "2025-07-27T18:47:03.296373"
+    },
+    "phase2_files": {
+      "status": "PASSED",
+      "details": {
+        "files": {
+          "services/enhanced_detail_scraper.py": {
+            "exists": true,
+            "size": 17083
+          },
+          "models_enriched.py": {
+            "exists": true,
+            "size": 10565
+          },
+          "services/enhanced_pipeline_orchestrator.py": {
+            "exists": true,
+            "size": 15805
+          },
+          "database/migrations/001_add_stage2_columns.sql": {
+            "exists": true,
+            "size": 4019
+          },
+          "database/migrations/001_rollback_stage2_columns.sql": {
+            "exists": true,
+            "size": 1272
+          },
+          "PHASE2_README.md": {
+            "exists": true,
+            "size": 10644
+          },
+          "PHASE2_IMPLEMENTATION_COMPLETE.md": {
+            "exists": true,
+            "size": 9062
+          }
+        },
+        "completion_rate": 100.0,
+        "available_files": 7,
+        "total_files": 7
+      },
+      "error": null,
+      "timestamp": "2025-07-27T18:47:03.305758"
+    },
+    "redis_files": {
+      "status": "PASSED",
+      "details": {
+        "services/redis_factory.py": {
+          "exists": true,
+          "size": 4116
+        },
+        "services/cache_manager.py": {
+          "exists": true,
+          "size": 16919
+        },
+        "test_complete_5_sources_redis.py": {
+          "exists": true,
+          "size": 17420
+        },
+        "test_real_stage1_with_redis.py": {
+          "exists": true,
+          "size": 17759
+        },
+        "REDIS_INTEGRATION_AUDIT_COMPLET.md": {
+          "exists": true,
+          "size": 10093
+        }
+      },
+      "error": null,
+      "timestamp": "2025-07-27T18:47:03.357423"
+    },
+    "environment_files": {
+      "status": "PASSED",
+      "details": {
+        ".env": {
+          "exists": true,
+          "size": 914
+        },
+        ".env.example": {
+          "exists": true,
+          "size": 702
+        },
+        "requirements.txt": {
+          "exists": true,
+          "size": 844,
+          "critical_dependencies": [
+            "redis",
+            "fakeredis",
+            "aiohttp",
+            "asyncio"
+          ]
+        },
+        "pyproject.toml": {
+          "exists": true,
+          "size": 1381
+        }
+      },
+      "error": null,
+      "timestamp": "2025-07-27T18:47:03.439630"
+    }
+  },
+  "summary": {
+    "total_tests": 7,
+    "passed": 6,
+    "failed": 1,
+    "warnings": 0
+  }
+}

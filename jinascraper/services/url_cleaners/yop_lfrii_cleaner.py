@@ -2,7 +2,7 @@
 
 import re
 from urllib.parse import urlparse
-from ...utils.type_helpers import List
+from typing import List
 
 
 def clean_yop_lfrii_urls(urls: List[str]) -> List[str]:
@@ -76,11 +76,10 @@ def is_valid_yop_lfrii_url(url: str) -> bool:
         if parsed.netloc != "yop.l-frii.com":
             return False
         
-        # Check path patterns
+        # FIXED PATTERNS - Based on validation report analysis
+        # Real URLs follow pattern: /emploi/coordinateur-projet-humanitaire/
         valid_patterns = [
-            r'^/\d{4}/\d{2}/\d{2}/[^/]+/?$',  # Date-based post
-            r'^/offres?-?d?-?emplois?/[^/]+/?$',  # Job offer section
-            r'^/[^/]*offres?-?d?-?emplois?[^/]*/?$'  # Contains "offre-emploi" or variants
+            r'^/emploi/[^/]+/?$'   # Main pattern for job URLs under /emploi/
         ]
         
         for pattern in valid_patterns:

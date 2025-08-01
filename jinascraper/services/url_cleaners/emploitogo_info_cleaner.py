@@ -2,7 +2,7 @@
 
 import re
 from urllib.parse import urlparse
-from ...utils.type_helpers import List
+from typing import List
 
 
 def clean_emploitogo_info_urls(urls: List[str]) -> List[str]:
@@ -72,10 +72,10 @@ def is_valid_emploitogo_info_url(url: str) -> bool:
         if parsed.netloc != "www.emploitogo.info":
             return False
         
-        # Check path patterns - typically blog posts with year/month structure or with "emploi" in the URL
+        # FIXED PATTERNS - Based on validation report analysis
+        # Real URLs follow pattern: /emploitogo/offre-demploi-togo-charge-de-communication/
         valid_patterns = [
-            r'^/\d{4}/\d{2}/[^/]+\.html$',  # Year/month pattern
-            r'^/[^/]*-emploi[^/]*\.html$'    # Contains "emploi" in the URL
+            r'^/emploitogo/[^/]+/?$'   # Main pattern for job URLs under /emploitogo/
         ]
         
         for pattern in valid_patterns:

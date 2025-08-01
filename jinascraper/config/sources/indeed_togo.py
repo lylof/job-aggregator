@@ -1,51 +1,51 @@
-"""Configuration for Indeed Togo job source."""
+"""Configuration for Indeed Togo job source - New Layered Architecture."""
 
-from ..base_config import SourceBaseConfig, SourceType
+from ..base_config import (
+    SourceBaseConfig, SourceStage1Config, SourceStage2Config,
+    Stage1JinaConfig, Stage2JinaConfig, DEFAULT_TECHNICAL_CONFIG,
+    SourceType
+)
 
 
 # URL extraction patterns specific to Indeed Togo
-INDEED_TOGO_URL_PATTERNS = [
-    r'(https://fr\.indeed\.com/voir-emploi\?jk=[^\s<>"\'&]*)',
-    r'(https://fr\.indeed\.com/viewjob\?jk=[^\s<>"\'&]*)'
-]
+INDEED_TOGO_URL_PATTERNS = ['(https://tg\\.indeed\\.com/viewjob[^\\s<>"\\\']*)']
 
 
-# Configuration for Indeed Togo
-INDEED_TOGO_CONFIG = SourceBaseConfig(
+# Base source configuration (stage-agnostic)
+INDEED_TOGO_BASE_CONFIG = SourceBaseConfig(
     name="Indeed Togo",
-    base_url="https://fr.indeed.com",
-    listing_url="https://fr.indeed.com/q-togo,-lomé-emplois.html",
+    base_url="https://tg.indeed.com",
+    listing_url="https://tg.indeed.com/jobs",
     source_type=SourceType.INTERNATIONAL,
-    
-    # Stage 1 (Exploration) parameters
-    css_selector_jobs=".job_seen_beacon, .slider_container .slider_item",
-    max_pages=20,
-    
-    # Stage 2 (Analysis) parameters
-    css_selector_exclude="#searchform, .np-footer, .jobsearch-SerpJobCard-footer",
-    use_reader_lm=True,
-    
-    # URL extraction patterns
     url_patterns=INDEED_TOGO_URL_PATTERNS,
-    
-    # Site-specific settings
-    request_delay=1.5,
-    requires_headers=True,
-    custom_headers={
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Accept-Language": "fr-FR,fr;q=0.9"
-    },
-    
-    # Quality indicators
+    request_delay=2.0,
     expected_jobs_per_page=15,
-    reliability_score=0.85,
-    disabled=True,  # Temporarily disabled - strict anti-bot protections
-    
-    # Jina Reader specific parameters
-    jina_params={
-        "gather_all_links_at_the_end": "true",
-        "remove_all_images": "true",
-        "timeout": "45",  # Longer timeout for Indeed
-        "wait_for_selector": ".job_seen_beacon"
-    }
+    reliability_score=0.85
+)
+
+
+# Stage 1 configuration (URL exploration and discovery)
+INDEED_TOGO_STAGE1_CONFIG = SourceStage1Config(
+    base=INDEED_TOGO_BASE_CONFIG,
+    css_selector_jobs='.jobsearch-SerpJobCard h2 a, .job_seen_beacon a',
+    max_pages=50,
+    jina_params={'css_selector_only': '.jobsearch-SerpJobCard, .job_seen_beacon', 'timeout': '35'}
+)
+
+
+# Stage 2 configuration (detailed content extraction and enrichment)
+INDEED_TOGO_STAGE2_CONFIG = SourceStage2Config(
+    base=INDEED_TOGO_BASE_CONFIG,
+    enabled=True,
+    css_selector_exclude='header, footer, .leftrail, .rightrail',
+    jina_params={'css_selector_only': '.jobsearch-JobComponent, .jobsearch-JobMetadataHeader', 'css_selector_excluding': 'header, footer, .leftrail, .rightrail, .ads', 'timeout': '45', 'with_generated_alt': 'true'},
+    gemini_config={'model': 'gemini-1.5-flash', 'temperature': 0.1, 'max_tokens': 2048}
+)
+
+
+# Backward compatibility - provides old-style interface
+from ..migration_helper import ConfigAdapter
+INDEED_TOGO_CONFIG = ConfigAdapter(
+    INDEED_TOGO_STAGE1_CONFIG,
+    INDEED_TOGO_STAGE2_CONFIG
 )

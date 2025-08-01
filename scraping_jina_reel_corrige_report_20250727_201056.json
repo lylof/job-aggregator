@@ -1,0 +1,55 @@
+{
+  "start_time": "2025-07-27T20:10:12.585355",
+  "jina_api_key": "jina_4f0b8fcb2f844db...",
+  "sources_tested": {
+    "emploi_tg": {
+      "source_name": "Emploi.tg",
+      "listing_url": "https://www.emploi.tg/recherche-jobs-togo",
+      "success": true,
+      "urls_found": 12,
+      "response_time": 9.220077514648438,
+      "content_length": 7117,
+      "sample_urls": [
+        "https://www.emploi.tg/offre-emploi-togo/repre",
+        "https://www.emploi.tg/offre-emploi-togo/charge-relation-client-hf-209529)\n- [A",
+        "https://www.emploi.tg/offre-emploi-togo/commercial-terrain-lome-324824)- [Comptable Expérimenté(e) - Lomé](http"
+      ]
+    },
+    "anpetogo": {
+      "source_name": "ANPE Togo",
+      "listing_url": "https://anpetogo.org/espace-chercheur-d-emploi/nos-offres-demplois",
+      "success": true,
+      "urls_found": 12,
+      "response_time": 14.97420048713684,
+      "content_length": 3392,
+      "sample_urls": [
+        "https://anpetogo.org/job/01-ge",
+        "https://anpetogo.org/job/un-01-ge",
+        "https://anpetogo.org/job/40600/ "
+      ]
+    },
+    "emploitogo_info": {
+      "source_name": "EmploiTogo.info",
+      "listing_url": "https://www.emploitogo.info/emploitogo/",
+      "success": true,
+      "urls_found": 12,
+      "response_time": 9.866401195526123,
+      "content_length": 4301,
+      "sample_urls": [
+        "https://www.emploitogo.info/champi",
+        "https://www.emploitogo.info/care-international-benin-togo-recrute-01-08-2025/)\n- [La Chaîne de l’E",
+        "https://www.emploitogo.info/la-ca"
+      ]
+    }
+  },
+  "scraping_results": {},
+  "redis_results": {
+    "error": "CacheManager non disponible",
+    "import_error": "No module named 'jinascraper'"
+  },
+  "total_real_jobs": 36,
+  "end_time": "2025-07-27T20:10:56.548183",
+  "success_rate": 1.0,
+  "successful_sources": 3,
+  "total_sources_tested": 3
+}

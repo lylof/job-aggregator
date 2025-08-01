@@ -3,13 +3,13 @@
 import asyncio
 import json
 import time
-from ..utils.type_helpers import Dict, Any, Optional, List
+from jinascraper.utils.type_helpers import Dict, Any, Optional, List
 import google.generativeai as genai
 import structlog
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
-from ..config import config
-from ..models import JobOffer, ExtractionMethod, ExtractionMetadata
+from jinascraper.config import config
+from jinascraper.models import JobOffer, ExtractionMethod, ExtractionMetadata
 
 
 logger = structlog.get_logger(__name__)
@@ -542,6 +542,189 @@ RÉPONSE (JSON valide uniquement):"""
                 "processing_time_seconds": time.time() - start_time
             }
     
+    async def structure_job_data_expert(
+        self,
+        expert_prompt: str,
+        model: str = "gemini-1.5-flash",
+        temperature: float = 0.1,
+        max_tokens: int = 2048
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Structure job data using expert prompt for Phase 2 Enhanced Pipeline.
+        This method is specifically designed for Stage 2 processing with comprehensive
+        JSON structuration.
+        
+        Args:
+            expert_prompt: Pre-built expert prompt with comprehensive instructions
+            model: Gemini model to use
+            temperature: Generation temperature
+            max_tokens: Maximum output tokens
+            
+        Returns:
+            Comprehensive structured job data dictionary or None if failed
+        """
+        try:
+            logger.info("Starting expert job data structuration",
+                       prompt_length=len(expert_prompt),
+                       model=model,
+                       temperature=temperature)
+            
+            start_time = time.time()
+            
+            # Create model with expert configuration
+            expert_model = genai.GenerativeModel(
+                model_name=model,
+                generation_config=genai.GenerationConfig(
+                    temperature=temperature,
+                    top_p=0.8,
+                    top_k=40,
+                    max_output_tokens=max_tokens,
+                    response_mime_type="application/json"
+                )
+            )
+            
+            # Enforce rate limiting
+            await self._enforce_rate_limit()
+            
+            # Generate structured content
+            response = await asyncio.wait_for(
+                asyncio.to_thread(expert_model.generate_content, expert_prompt),
+                timeout=90.0  # Longer timeout for expert processing
+            )
+            
+            processing_time = int((time.time() - start_time) * 1000)
+            
+            if not response.text:
+                logger.warning("Empty response from Gemini expert")
+                return None
+            
+            # Parse JSON response with enhanced error handling
+            try:
+                structured_data = json.loads(response.text)
+            except json.JSONDecodeError as e:
+                logger.warning("Failed to parse expert JSON response, attempting cleanup",
+                             response_preview=response.text[:300],
+                             error=str(e))
+                
+                # Enhanced JSON cleanup for expert responses
+                cleaned_response = self._clean_expert_json_response(response.text)
+                try:
+                    structured_data = json.loads(cleaned_response)
+                    logger.info("Successfully parsed cleaned expert JSON response")
+                except json.JSONDecodeError:
+                    logger.error("Failed to parse even cleaned expert JSON response",
+                               cleaned_preview=cleaned_response[:300])
+                    return None
+            
+            # Validate expert structured data
+            if not self._validate_expert_structured_data(structured_data):
+                logger.warning("Expert structured data validation failed")
+                return None
+            
+            logger.info("Expert job data structuration completed successfully",
+                       processing_time_ms=processing_time,
+                       has_title=bool(structured_data.get("title")),
+                       has_company=bool(structured_data.get("company")),
+                       has_location=bool(structured_data.get("location")),
+                       has_salary=bool(structured_data.get("salary")),
+                       has_requirements=bool(structured_data.get("requirements")))
+            
+            return structured_data
+            
+        except Exception as e:
+            logger.error("Expert job data structuration failed",
+                        error=str(e),
+                        error_type=type(e).__name__)
+            return None
+    
+    def _clean_expert_json_response(self, response_text: str) -> str:
+        """
+        Enhanced JSON cleaning for expert responses with complex nested structures.
+        
+        Args:
+            response_text: Raw response text from Gemini
+            
+        Returns:
+            Cleaned JSON string
+        """
+        import re
+        
+        # Remove markdown code blocks
+        cleaned = re.sub(r'```json\s*', '', response_text)
+        cleaned = re.sub(r'```\s*$', '', cleaned)
+        
+        # Remove any explanatory text before JSON
+        first_brace = cleaned.find('{')
+        if first_brace > 0:
+            cleaned = cleaned[first_brace:]
+        
+        # Remove any text after the last }
+        last_brace = cleaned.rfind('}')
+        if last_brace > 0:
+            cleaned = cleaned[:last_brace + 1]
+        
+        # Fix common JSON issues in expert responses
+        cleaned = re.sub(r',\s*}', '}', cleaned)  # Remove trailing commas in objects
+        cleaned = re.sub(r',\s*]', ']', cleaned)  # Remove trailing commas in arrays
+        
+        # Fix quotes issues
+        cleaned = re.sub(r'([{,]\s*)"([^"]+)"\s*:', r'\1"\2":', cleaned)  # Normalize key quotes
+        
+        # Fix null values
+        cleaned = re.sub(r':\s*null\s*([,}])', r': null\1', cleaned)
+        
+        return cleaned.strip()
+    
+    def _validate_expert_structured_data(self, data: Dict[str, Any]) -> bool:
+        """
+        Validate expert structured data for Phase 2 Enhanced Pipeline.
+        
+        Args:
+            data: Structured data from expert prompt
+            
+        Returns:
+            True if data meets expert validation criteria
+        """
+        try:
+            # Check that it's a dictionary
+            if not isinstance(data, dict):
+                logger.warning("Expert data is not a dictionary")
+                return False
+            
+            # Check required fields for expert extraction
+            required_fields = ["title", "company"]
+            for field in required_fields:
+                if field not in data or not data[field]:
+                    logger.warning(f"Missing required expert field: {field}")
+                    return False
+            
+            # Validate nested structures if present
+            nested_objects = ["location", "contract", "salary", "requirements", "description", "application", "metadata"]
+            for field in nested_objects:
+                if field in data and data[field] is not None:
+                    if not isinstance(data[field], dict):
+                        logger.warning(f"Expert field {field} should be a dictionary")
+                        return False
+            
+            # Validate specific nested structures
+            if "location" in data and data["location"]:
+                location = data["location"]
+                if "country" in location and location["country"] and location["country"] != "Togo":
+                    logger.info(f"Non-Togo location detected: {location['country']}")
+            
+            if "salary" in data and data["salary"]:
+                salary = data["salary"]
+                if "currency" in salary and salary["currency"]:
+                    valid_currencies = ["XOF", "EUR", "USD"]
+                    if salary["currency"] not in valid_currencies:
+                        logger.warning(f"Invalid currency: {salary['currency']}")
+            
+            return True
+            
+        except Exception as e:
+            logger.error("Expert data validation failed", error=str(e))
+            return False
+
     def validate_structured_data(self, data: Dict[str, Any]) -> bool:
         """
         Validate structured job data against schema.

@@ -1,6 +1,6 @@
 """URL cleaner for ANPE Togo job source."""
 
-from ...utils.type_helpers import List
+from typing import List
 from .base_cleaner import PatternBasedURLCleaner
 
 
@@ -65,3 +65,17 @@ def clean_anpe_urls(urls: List[str]) -> List[str]:
         List of cleaned and filtered URLs
     """
     return _anpe_togo_cleaner.clean_urls(urls)
+
+
+def clean_anpetogo_urls(urls: List[str]) -> List[str]:
+    """
+    Clean and filter job offer URLs specific to ANPE Togo.
+    Alternative function name for compatibility.
+    
+    Args:
+        urls: List of URLs to clean
+        
+    Returns:
+        List of cleaned and filtered URLs
+    """
+    return clean_anpe_urls(urls)

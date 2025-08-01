@@ -1,10 +1,10 @@
-"""Initialize the source registry with all configured sources."""
+"""Initialize the source registry with all configured sources - New Architecture."""
 
 import structlog
 from .source_registry import SourceRegistry
 
-# Import source configurations
-from .sources.anpetogo import ANPE_TOGO_CONFIG
+# Import source configurations (backward compatibility adapters)
+from .sources.anpetogo import ANPETOGO_CONFIG
 from .sources.emploi_tg import EMPLOI_TG_CONFIG
 from .sources.emploitogo_info import EMPLOITOGO_INFO_CONFIG
 from .sources.yop_lfrii import YOP_LFRII_CONFIG
@@ -16,8 +16,8 @@ logger = structlog.get_logger(__name__)
 
 def initialize_registry():
     """Initialize the source registry with all configured sources."""
-    # Register all sources
-    SourceRegistry.register_source("anpetogo", ANPE_TOGO_CONFIG)
+    # Register all sources using backward compatibility adapters
+    SourceRegistry.register_source("anpetogo", ANPETOGO_CONFIG)
     SourceRegistry.register_source("emploi_tg", EMPLOI_TG_CONFIG)
     SourceRegistry.register_source("emploitogo_info", EMPLOITOGO_INFO_CONFIG)
     SourceRegistry.register_source("yop_lfrii", YOP_LFRII_CONFIG)

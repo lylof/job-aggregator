@@ -67,27 +67,31 @@ class DetailScraper:
             if source_name:
                 source_config = SourceRegistry.get_source(source_name)
             
-            # Stage 2 optimized parameters for Jina Reader
-            params = {
-                "timeout": "60",
-                "with_generated_alt": "true"
-            }
-            
-            # Use ReaderLM-v2 based on source config or parameter
-            reader_lm_enabled = use_reader_lm
+            # Get Stage 2 configuration parameters
             if source_config:
-                reader_lm_enabled = source_config.use_reader_lm
+                try:
+                    # Try to get Stage 2 configuration from source
+                    params = source_config.get_stage2_jina_params()
+                    logger.info("Using Stage 2 Jina configuration from source", 
+                               source=source_name, params=params)
+                except (AttributeError, Exception) as e:
+                    # Fallback to default Stage 2 parameters
+                    params = {
+                        "timeout": "60",
+                        "with_generated_alt": "true",
+                        "css_selector_excluding": "header, footer, .ads, .sidebar, .navigation, .menu, .social-media"
+                    }
+                    logger.info("Using default Stage 2 parameters (config method failed)", error=str(e))
+            else:
+                # Fallback to default Stage 2 parameters
+                params = {
+                    "timeout": "60",
+                    "with_generated_alt": "true",
+                    "css_selector_excluding": "header, footer, .ads, .sidebar, .navigation, .menu, .social-media"
+                }
+                logger.info("Using default Stage 2 parameters (no source config)")
             
-            if reader_lm_enabled:
-                params["use_reader_lm_v2"] = "true"
-                logger.info("Using ReaderLM-v2 for enhanced extraction")
-            
-            # Use source-specific exclusion selectors
-            exclude_selectors = "header, footer, .ads, .sidebar, .navigation, .menu, .social-media"
-            if source_config and source_config.css_selector_exclude:
-                exclude_selectors = source_config.css_selector_exclude
-            
-            params["css_selector_excluding"] = exclude_selectors
+            # ReaderLM-v2 supprimé - utilisation du moteur standard uniquement
             
             # Use Jina Reader with Stage 2 configuration
             response_data = await self.jina_client.make_request(job_url, params)

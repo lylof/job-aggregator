@@ -5,11 +5,11 @@ import hashlib
 import json
 import time
 from typing import List, Optional, Dict, Any, Set
-import redis.asyncio as redis
 import structlog
 from datetime import datetime, timedelta
 
 from ..config import config
+from .redis_factory import create_redis_client, test_redis_client, is_fake_redis, get_redis_info
 
 
 logger = structlog.get_logger(__name__)
@@ -30,7 +30,7 @@ class CacheManager:
     
     def __init__(self):
         self.redis_url = config.redis_url
-        self.redis_client: Optional[redis.Redis] = None
+        self.redis_client = None
         
         # Cache TTL settings (7 days as per specs)
         self.url_ttl = 7 * 24 * 60 * 60  # 7 days in seconds
@@ -45,21 +45,21 @@ class CacheManager:
         logger.info("CacheManager initialized", redis_url=self.redis_url)
     
     async def connect(self):
-        """Establish connection to Redis."""
+        """Establish connection to Redis (real or fake)."""
         try:
-            self.redis_client = redis.from_url(
-                self.redis_url,
-                encoding="utf-8",
-                decode_responses=True,
-                socket_connect_timeout=5,
-                socket_timeout=5,
-                retry_on_timeout=True,
-                health_check_interval=30
-            )
+            # Create Redis client using factory
+            self.redis_client = create_redis_client(self.redis_url)
             
             # Test connection
-            await self.redis_client.ping()
-            logger.info("Redis connection established successfully")
+            connection_test = await test_redis_client(self.redis_client)
+            if not connection_test:
+                raise CacheConnectionError("Redis client test failed")
+            
+            # Log connection info
+            redis_info = get_redis_info(self.redis_client)
+            logger.info("Redis connection established successfully", 
+                       redis_type=redis_info["type"],
+                       is_fake=redis_info["is_fake"])
             
         except Exception as e:
             logger.error("Failed to connect to Redis", error=str(e))

@@ -2,7 +2,7 @@
 
 import re
 from urllib.parse import urlparse, parse_qs
-from ...utils.type_helpers import List
+from typing import List
 
 
 def clean_indeed_togo_urls(urls: List[str]) -> List[str]:

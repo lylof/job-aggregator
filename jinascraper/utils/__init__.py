@@ -1,1 +1,1 @@
-"""Utility modules for the jinascraper package."""
+# Utils package for JinaScraper

@@ -254,16 +254,50 @@ class ListingScraper:
         
         return False
     
-    async def extract_urls_from_all_sources(self) -> Dict[str, List[str]]:
+    async def extract_urls_from_all_sources(self, sources_filter: Optional[List[str]] = None) -> Dict[str, List[str]]:
         """
-        Extract job URLs from all configured Togo sources in parallel.
+        Extract job URLs from all configured Togo sources or filtered sources in parallel.
+        
+        Args:
+            sources_filter: Optional list of source names to process.
+                          If None, processes all active sources.
         
         Returns:
             Dictionary mapping source names to lists of job URLs
         """
-        logger.info("Starting parallel URL extraction from all Togo sources")
+        logger.info("Starting parallel URL extraction from sources", sources_filter=sources_filter)
         
         sources = SourceRegistry.get_active_sources()
+        
+        # ✅ CORRECTION: Apply source filtering
+        if sources_filter:
+            # Filter sources according to the provided list
+            filtered_sources = {
+                name: config for name, config in sources.items() 
+                if name in sources_filter
+            }
+            
+            # Check that all requested sources exist
+            missing_sources = set(sources_filter) - set(sources.keys())
+            if missing_sources:
+                logger.warning(
+                    "Some requested sources not found in active sources",
+                    missing_sources=list(missing_sources),
+                    available_sources=list(sources.keys())
+                )
+            
+            sources = filtered_sources
+            logger.info(
+                f"Source filtering applied: {len(sources)} sources selected out of {len(SourceRegistry.get_active_sources())}",
+                selected_sources=list(sources.keys())
+            )
+        else:
+            logger.info(f"No filtering applied: processing all {len(sources)} active sources")
+        
+        if not sources:
+            logger.warning("No sources to process after filtering")
+            return {}
+        
         tasks = []
         
         for source_name, source_config in sources.items():

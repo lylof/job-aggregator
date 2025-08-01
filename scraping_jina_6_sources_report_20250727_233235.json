@@ -1,0 +1,76 @@
+{
+  "start_time": "2025-07-27T23:30:22.550307",
+  "jina_api_key": "jina_4f0b8fcb2f844db...",
+  "sources_tested": {
+    "emploi_tg": {
+      "source_name": "Emploi.tg",
+      "listing_url": "https://www.emploi.tg/recherche-jobs-togo",
+      "success": true,
+      "urls_found": 12,
+      "response_time": 6.036492109298706,
+      "content_length": 7117,
+      "sample_urls": [
+        "https://www.emploi.tg/offre-emploi-togo/assistant-vente-lome-quartier-agoe-source-328786 \"Assistant de Vente - Lomé Quartier Agoe La Source\"",
+        "https://www.emploi.tg/offre-emploi-togo/charge-relation-client-hf-209529 \"Chargé de Relation Client H/F\"",
+        "https://www.emploi.tg/offre-emploi-togo/assistante-hygiene-securite-environnement-hse-lome-277085 \"Assistant(e"
+      ]
+    },
+    "anpetogo": {
+      "source_name": "ANPE Togo",
+      "listing_url": "https://anpetogo.org/espace-chercheur-d-emploi/nos-offres-demplois",
+      "success": true,
+      "urls_found": 12,
+      "response_time": 4.823965549468994,
+      "content_length": 3392,
+      "sample_urls": [
+        "https://anpetogo.org/job/auditeur-junior-h-f/ \"Auditeur junior (H/F",
+        "https://anpetogo.org/job/consultant-junior-en-expertise-comptable/ \"Consultant junior en expertise comptable\"",
+        "https://anpetogo.org/job/01-assistante-ressources-humaines-h-f/ \" (01"
+      ]
+    },
+    "emploitogo_info": {
+      "source_name": "EmploiTogo.info",
+      "listing_url": "https://www.emploitogo.info/emploitogo/",
+      "success": true,
+      "urls_found": 12,
+      "response_time": 13.965725660324097,
+      "content_length": 4355,
+      "sample_urls": [
+        "https://www.emploitogo.info/lanpe-recrute-03-08-2025-1000-postes/ \"L’ANPE recrute-03/08/2025 (1000 postes",
+        "https://www.emploitogo.info/steel-cube-togo-is-recruiting-10-08-2025-02-positions/ \"STEEL CUBE TOGO is recruiting-10/08/2025 ( 02 positions",
+        "https://www.emploitogo.info/steel-cube-togo-recrute-10-08-2025/ \"STEEL CUBE TOGO recrute-10/08/2025\""
+      ]
+    },
+    "yop_lfrii": {
+      "source_name": "YOP L'Frii",
+      "listing_url": "https://yop.l-frii.com/emploi",
+      "success": false,
+      "error": "HTTP 422: {\"data\":null,\"code\":422,\"name\":\"AssertionFailureError\",\"status\":42206,\"message\":\"No content available for URL https://yop.l-frii.com/emploi with target selector h2.elementor-heading-title.elementor-si...",
+      "response_time": 31.991347312927246
+    },
+    "linkedin_togo": {
+      "source_name": "LinkedIn Togo",
+      "listing_url": "https://tg.linkedin.com/jobs/",
+      "success": false,
+      "error": "HTTP 422: {\"data\":null,\"code\":422,\"name\":\"AssertionFailureError\",\"status\":42206,\"message\":\"No content available for URL https://tg.linkedin.com/jobs/ with target selector .base-card__full-link\",\"readableMessage...",
+      "response_time": 46.72449827194214
+    },
+    "indeed_togo": {
+      "source_name": "Indeed Togo",
+      "listing_url": "https://tg.indeed.com/jobs",
+      "success": false,
+      "error": "HTTP 400: {\"data\":null,\"path\":\"url\",\"code\":400,\"name\":\"ParamValidationError\",\"status\":40001,\"message\":\"Domain 'tg.indeed.com' could not be resolved\",\"readableMessage\":\"ParamValidationError(url): Domain 'tg.inde...",
+      "response_time": 0.5603387355804443
+    }
+  },
+  "scraping_results": {},
+  "redis_results": {
+    "error": "CacheManager non disponible",
+    "import_error": "No module named 'jinascraper'"
+  },
+  "total_real_jobs": 36,
+  "end_time": "2025-07-27T23:32:35.029739",
+  "success_rate": 0.75,
+  "successful_sources": 3,
+  "total_sources_tested": 6
+}

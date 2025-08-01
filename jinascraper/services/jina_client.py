@@ -2,12 +2,12 @@
 
 import asyncio
 import time
-from ..utils.type_helpers import Dict, Any, Optional, List
+from jinascraper.utils.type_helpers import Dict, Any, Optional, List
 import httpx
 import structlog
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
-from ..config import config
+from jinascraper.config import config
 
 
 logger = structlog.get_logger(__name__)
@@ -110,11 +110,34 @@ class JinaClient:
                 # Prepare headers for the request
                 headers = {}
                 
-                # Handle CSS selector as header instead of parameter
-                if params and "css_selector_only" in params:
-                    headers["X-Target-Selector"] = params["css_selector_only"]
-                    # Remove from params since it's now a header
-                    params = {k: v for k, v in params.items() if k != "css_selector_only"}
+                # SOLUTION: Use X-Respond-With header to bypass readability filtering
+                # This ensures we get complete content instead of truncated content
+                if params and params.get("return_format") == "markdown":
+                    headers["X-Respond-With"] = "markdown"
+                    # Remove return_format from params since we're using header instead
+                    params = {k: v for k, v in params.items() if k != "return_format"}
+                
+                # Handle CSS selectors as headers instead of parameters
+                if params:
+                    # Convert target_selector to X-Target-Selector header
+                    if "target_selector" in params:
+                        headers["X-Target-Selector"] = params["target_selector"]
+                        params = {k: v for k, v in params.items() if k != "target_selector"}
+                    
+                    # Convert remove_selector to X-Remove-Selector header  
+                    if "remove_selector" in params:
+                        headers["X-Remove-Selector"] = params["remove_selector"]
+                        params = {k: v for k, v in params.items() if k != "remove_selector"}
+                    
+                    # Convert css_selector_excluding to X-CSS-Selector-Excluding header
+                    if "css_selector_excluding" in params:
+                        headers["X-CSS-Selector-Excluding"] = params["css_selector_excluding"]
+                        params = {k: v for k, v in params.items() if k != "css_selector_excluding"}
+                    
+                    # Handle legacy css_selector_only
+                    if "css_selector_only" in params:
+                        headers["X-Target-Selector"] = params["css_selector_only"]
+                        params = {k: v for k, v in params.items() if k != "css_selector_only"}
                 
                 logger.info("Making Jina Reader request", url=jina_url, params=params, headers=headers)
                 

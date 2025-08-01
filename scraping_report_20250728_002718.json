@@ -1,0 +1,78 @@
+{
+  "timestamp": "2025-07-28T00:27:18.649347",
+  "options": {
+    "sources": [
+      "emploi_tg",
+      "anpetogo",
+      "emploitogo_info"
+    ],
+    "max_urls": 3,
+    "dry_run": false
+  },
+  "results": {
+    "total_sources": 3,
+    "successful_sources": 2,
+    "total_urls": 80,
+    "valid_urls": 6,
+    "processing_time": 31.483553647994995,
+    "success_rate": 0.6666666666666666
+  },
+  "source_details": {
+    "emploi_tg": {
+      "source_name": "Emploi.tg",
+      "success": true,
+      "urls_found": 50,
+      "urls_valid": 3,
+      "response_time": 4.893922805786133,
+      "error_message": null,
+      "sample_urls": [
+        [
+          "https://www.emploi.tg/offre-emploi-togo/assistant-vente-lome-quartier-agoe-source-328786 \"Assistant de Vente - Lomé Quartier Agoe La Source\"",
+          "Assistant de Vente - Lomé Quartier Agoe La Source"
+        ],
+        [
+          "https://www.emploi.tg/offre-emploi-togo/charge-relation-client-hf-209529 \"Chargé de Relation Client H/F\"",
+          "Chargé de Relation Client H/F"
+        ],
+        [
+          "https://www.emploi.tg/offre-emploi-togo/assistante-hygiene-securite-environnement-hse-lome-277085 \"Assistant(e",
+          "Assistant(e) Hygiène - Sécurité - Environnement (HSE) - Lomé"
+        ]
+      ]
+    },
+    "anpetogo": {
+      "source_name": "ANPE Togo",
+      "success": true,
+      "urls_found": 30,
+      "urls_valid": 3,
+      "response_time": 5.3093695640563965,
+      "error_message": null,
+      "sample_urls": [
+        [
+          "https://anpetogo.org/job/auditeur-junior-h-f/ \"Auditeur junior (H/F",
+          "Auditeur junior (H/F)"
+        ],
+        [
+          "https://anpetogo.org/job/consultant-junior-en-expertise-comptable/ \"Consultant junior en expertise comptable\"",
+          "Consultant junior en expertise comptable"
+        ],
+        [
+          "https://anpetogo.org/job/01-assistante-ressources-humaines-h-f/ \" (01",
+          "(01) ASSISTANT(E) RESSOURCES HUMAINES (H/F)"
+        ]
+      ]
+    },
+    "emploitogo_info": {
+      "source_name": "EmploiTogo.info",
+      "success": false,
+      "urls_found": 0,
+      "urls_valid": 0,
+      "response_time": 12.203789234161377,
+      "error_message": "HTTP 503: upstream connect error or disconnect/reset before headers. reset reason: connection termination...",
+      "sample_urls": []
+    }
+  },
+  "errors": [
+    "EmploiTogo.info: HTTP 503: upstream connect error or disconnect/reset before headers. reset reason: connection termination..."
+  ]
+}

@@ -1,0 +1,84 @@
+{
+  "timestamp": "2025-07-28T00:30:16.799544",
+  "options": {
+    "sources": null,
+    "max_urls": 2,
+    "dry_run": false
+  },
+  "results": {
+    "total_sources": 4,
+    "successful_sources": 3,
+    "total_urls": 111,
+    "valid_urls": 6,
+    "processing_time": 118.97548842430115,
+    "success_rate": 0.75
+  },
+  "source_details": {
+    "emploi_tg": {
+      "source_name": "Emploi.tg",
+      "success": true,
+      "urls_found": 50,
+      "urls_valid": 2,
+      "response_time": 34.44316101074219,
+      "error_message": null,
+      "sample_urls": [
+        [
+          "https://www.emploi.tg/offre-emploi-togo/assistant-vente-lome-quartier-agoe-source-328786 \"Assistant de Vente - Lomé Quartier Agoe La Source\"",
+          "Assistant de Vente - Lomé Quartier Agoe La Source"
+        ],
+        [
+          "https://www.emploi.tg/offre-emploi-togo/charge-relation-client-hf-209529 \"Chargé de Relation Client H/F\"",
+          "Chargé de Relation Client H/F"
+        ]
+      ]
+    },
+    "anpetogo": {
+      "source_name": "ANPE Togo",
+      "success": true,
+      "urls_found": 30,
+      "urls_valid": 2,
+      "response_time": 9.426433801651001,
+      "error_message": null,
+      "sample_urls": [
+        [
+          "https://anpetogo.org/job/auditeur-junior-h-f/ \"Auditeur junior (H/F",
+          "Auditeur junior (H/F)"
+        ],
+        [
+          "https://anpetogo.org/job/consultant-junior-en-expertise-comptable/ \"Consultant junior en expertise comptable\"",
+          "Consultant junior en expertise comptable"
+        ]
+      ]
+    },
+    "emploitogo_info": {
+      "source_name": "EmploiTogo.info",
+      "success": true,
+      "urls_found": 31,
+      "urls_valid": 2,
+      "response_time": 28.150599479675293,
+      "error_message": null,
+      "sample_urls": [
+        [
+          "https://www.emploitogo.info/lanpe-recrute-03-08-2025-1000-postes/ \"L’ANPE recrute-03/08/2025 (1000 postes",
+          "L’ANPE recrute-03/08/2025 (1000 postes)"
+        ],
+        [
+          "https://www.emploitogo.info/steel-cube-togo-is-recruiting-10-08-2025-02-positions/ \"STEEL CUBE TOGO is recruiting-10/08/2025 ( 02 positions",
+          "STEEL CUBE TOGO is recruiting-10/08/2025 ( 02 positions)"
+        ]
+      ]
+    },
+    "yop_lfrii": {
+      "source_name": "YOP L'Frii",
+      "success": false,
+      "urls_found": 0,
+      "urls_valid": 0,
+      "response_time": 35.57117676734924,
+      "error_message": "HTTP 422: {\"data\":null,\"code\":422,\"name\":\"AssertionFailureError\",\"status\":42206,\"message\":\"No content available for URL https://yop.l-frii.com/emploi with target selector h2.elementor-heading-title.elementor-si...",
+      "sample_urls": []
+    }
+  },
+  "errors": [
+    "YOP L'Frii: HTTP 422: {\"data\":null,\"code\":422,\"name\":\"AssertionFailureError\",\"status\":42206,\"message\":\"No content available for URL https://yop.l-frii.com/emploi with target selector h2.elementor-heading-title.elementor-si..."
+  ]
+}

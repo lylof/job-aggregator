@@ -1,0 +1,136 @@
+{
+  "start_time": "2025-07-27T19:46:16.832803",
+  "tests": {
+    "source_registry": {
+      "working_sources": 6,
+      "total_sources": 6,
+      "success_rate": 1.0,
+      "details": {
+        "emploi_tg": {
+          "loaded": true,
+          "base_url": "https://www.emploi.tg",
+          "listing_url": "https://www.emploi.tg/recherche-jobs-togo",
+          "patterns": 1,
+          "reliability": 0.9
+        },
+        "anpetogo": {
+          "loaded": true,
+          "base_url": "https://anpetogo.org",
+          "listing_url": "https://anpetogo.org/espace-chercheur-d-emploi/nos-offres-demplois",
+          "patterns": 1,
+          "reliability": 0.95
+        },
+        "linkedin_togo": {
+          "loaded": true,
+          "base_url": "https://tg.linkedin.com",
+          "listing_url": "https://tg.linkedin.com/jobs/search?location=Togo&geoId=103603395&f_TPR=r86400&currentJobId=&position=1&pageNum=0",
+          "patterns": 1,
+          "reliability": 0.85
+        },
+        "indeed_togo": {
+          "loaded": true,
+          "base_url": "https://tg.indeed.com",
+          "listing_url": "https://tg.indeed.com/jobs",
+          "patterns": 1,
+          "reliability": 0.85
+        },
+        "yop_lfrii": {
+          "loaded": true,
+          "base_url": "https://yop.l-frii.com",
+          "listing_url": "https://yop.l-frii.com/offres-demplois/",
+          "patterns": 1,
+          "reliability": 0.75
+        },
+        "emploitogo_info": {
+          "loaded": true,
+          "base_url": "https://emploitogo.info",
+          "listing_url": "https://www.emploitogo.info/emploitogo/",
+          "patterns": 1,
+          "reliability": 0.8
+        }
+      }
+    },
+    "url_cleaners": {
+      "working_cleaners": 3,
+      "total_cleaners": 3,
+      "success_rate": 1.0,
+      "details": {
+        "emploi_tg": {
+          "input_urls": 4,
+          "cleaned_urls": 2,
+          "expected": 2,
+          "success": true,
+          "sample_cleaned": [
+            "https://www.emploi.tg/offre-emploi-togo/developpeur-python/",
+            "https://www.emploi.tg/offre-emploi-togo/comptable-senior/"
+          ]
+        },
+        "emploitogo_info": {
+          "input_urls": 3,
+          "cleaned_urls": 2,
+          "expected": 2,
+          "success": true,
+          "sample_cleaned": [
+            "https://www.emploitogo.info/emploitogo/marketing-digital/",
+            "https://www.emploitogo.info/emploitogo/ingenieur-reseau/"
+          ]
+        },
+        "anpetogo": {
+          "input_urls": 3,
+          "cleaned_urls": 2,
+          "expected": 2,
+          "success": true,
+          "sample_cleaned": [
+            "https://anpetogo.org/offre/secretaire-bilingue/",
+            "https://anpetogo.org/offre/technicien-maintenance/"
+          ]
+        }
+      }
+    },
+    "cache_simulation": {
+      "cycle1_new": 3,
+      "cycle2_new": 0,
+      "cycle3_new": 1,
+      "delta_working": true
+    },
+    "complete_cycle": {
+      "summary": {
+        "sources_processed": 3,
+        "total_discovered": 11,
+        "total_cleaned": 7,
+        "total_new": 7,
+        "overall_cleaning_rate": 0.6363636363636364,
+        "processing_time": 0.025232791900634766,
+        "urls_per_second": 435.94066179110683
+      },
+      "sources": {
+        "emploi_tg": {
+          "discovered": 5,
+          "cleaned": 3,
+          "new": 3,
+          "cleaning_rate": 0.6
+        },
+        "emploitogo_info": {
+          "discovered": 3,
+          "cleaned": 2,
+          "new": 2,
+          "cleaning_rate": 0.6666666666666666
+        },
+        "anpetogo": {
+          "discovered": 3,
+          "cleaned": 2,
+          "new": 2,
+          "cleaning_rate": 0.6666666666666666
+        }
+      }
+    }
+  },
+  "metrics": {
+    "total_tests": 4,
+    "successful_tests": 4,
+    "success_rate": 1.0,
+    "overall_success": true
+  },
+  "success": true,
+  "end_time": "2025-07-27T19:46:24.419322"
+}
