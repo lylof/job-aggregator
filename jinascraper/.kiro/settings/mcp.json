@@ -34,7 +34,7 @@
         "jina-mcp-tools"
       ],
       "env": {
-        "JINA_API_KEY": "jina_4f0b8fcb2f844db7886c0a663332843epR-68XjAtEt1GpcuDuGgTDLEnA1p"
+        "JINA_API_KEY": "jina_98c08aaa007245e697294baf670d7f2bJDyQNuecSwxW9jo8r0h6gsFh7-yU"
       }
     },
     "prisma-mcp-server": {
@@ -53,6 +53,12 @@
         "@modelcontextprotocol/server-sequential-thinking"
       ],
       "env": {}
+    },
+    "memory": {
+      "command": "node",
+      "args": [
+        "C:\\Users\\Lylof\\CascadeProjects\\job-aggregator\\jinascraper\\mcp-server\\memory-server.js"
+      ]
     }
   }
 }

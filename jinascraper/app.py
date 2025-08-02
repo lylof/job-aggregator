@@ -9,9 +9,15 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 import structlog
 
-from .core.orchestrator import ScrapingOrchestrator
-from .models import ScrapingResult
-from .utils.enhanced_logger import create_logger
+# Support exécution en module (package) et script direct
+try:
+    from .core.orchestrator import ScrapingOrchestrator
+    from .models import ScrapingResult
+    from .utils.enhanced_logger import create_logger
+except ImportError:
+    from core.orchestrator import ScrapingOrchestrator
+    from models import ScrapingResult
+    from utils.enhanced_logger import create_logger
 
 
 logger = structlog.get_logger(__name__)

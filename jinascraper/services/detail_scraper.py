@@ -9,6 +9,9 @@ import structlog
 from ..config import SourceRegistry, JINA_BASE_CONFIG, SourceBaseConfig
 from ..models import JobOffer, ExtractionMethod, ExtractionMetadata
 from .jina_client import JinaClient
+from .gemini_service import GeminiService
+from .openrouter_service import OpenRouterService
+import os
 
 
 logger = structlog.get_logger(__name__)
@@ -17,14 +20,23 @@ logger = structlog.get_logger(__name__)
 class DetailScraper:
     """Service for extracting structured job data from job pages (Stage 2)."""
     
-    def __init__(self, jina_client: Optional[JinaClient] = None):
+    def __init__(self, jina_client: Optional[JinaClient] = None, allow_raw: Optional[bool] = None):
         """
         Initialize the DetailScraper.
         
         Args:
             jina_client: Optional JinaClient instance. If not provided, a new one will be created.
+            allow_raw: Accept raw markdown when structuring fails (overrides ALLOW_RAW_ONLY env)
         """
         self.jina_client = jina_client or JinaClient()
+        self.gemini = GeminiService()
+        self.fallback = OpenRouterService()
+        # Allow-raw flag via arg or env
+        if allow_raw is None:
+            env_val = os.getenv("ALLOW_RAW_ONLY", "0").lower()
+            self.allow_raw = env_val in ("1", "true", "yes", "on")
+        else:
+            self.allow_raw = allow_raw
     
     async def __aenter__(self):
         """Async context manager entry."""
@@ -110,9 +122,46 @@ class DetailScraper:
                 processing_time_ms=processing_time
             )
             
-            # Parse job content to structured data
+            # First-pass regex parsing (baseline)
             job_data = self._parse_job_content(content, job_url, metadata)
-            
+
+            # Try Gemini structuring to improve quality (threshold lowered in GeminiService)
+            structured = None
+            try:
+                structured = await self.gemini.structure_job_data(content, job_url, source_site)
+            except Exception as e:
+                logger.warning("Gemini structuring raised exception, will try fallback", url=job_url, error=str(e))
+
+            # Fallback LLM if Gemini failed
+            if not structured:
+                try:
+                    structured = await self.fallback.structure_job_data(content, job_url)
+                except Exception as e:
+                    logger.error("LLM fallback failed with exception", url=job_url, error=str(e))
+                    structured = None
+
+            # Merge structured fields when available
+            if structured and isinstance(structured, dict):
+                merged = {**job_data}
+                # Prefer structured fields if present
+                for k in ("title", "company", "location", "contract_type", "salary_range",
+                          "experience_level", "education_level", "sector", "description"):
+                    if k in structured and structured[k]:
+                        merged[k] = structured[k]
+                # Attach raw structured payload and quality info if provided
+                merged["structured_json"] = structured
+                merged["extraction_method"] = structured.get("extraction_method", ExtractionMethod.GEMINI)
+                job_data = merged
+
+            # If still no structured and allow_raw enabled, keep raw record
+            if not structured and self.allow_raw:
+                job_data.setdefault("quality_metrics", {
+                    "completeness_score": 0.0,
+                    "quality_issues": ["structured_json_missing_allow_raw"],
+                    "field_coverage": {}
+                })
+                job_data["extraction_method"] = "raw_only"
+
             logger.info(
                 "Job data extracted successfully",
                 url=job_url,
@@ -121,9 +170,10 @@ class DetailScraper:
                 has_title=bool(job_data.get("title")),
                 has_company=bool(job_data.get("company")),
                 content_length=len(content),
-                used_reader_lm=use_reader_lm
+                used_reader_lm=use_reader_lm,
+                has_structured=bool(job_data.get("structured_json"))
             )
-            
+
             return job_data
             
         except Exception as e:

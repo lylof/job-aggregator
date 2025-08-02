@@ -3,8 +3,22 @@
 
 import asyncio
 import sys
+import os
 import click
-from jinascraper.app import JinaScraperApp, ScrapeOptions
+
+# Exécution depuis le repo (script direct) ET depuis package (python -m jinascraper.cli)
+# 1) Ajouter le répertoire courant et le parent au PYTHONPATH si nécessaire
+cwd = os.path.abspath(os.path.dirname(__file__))
+parent = os.path.abspath(os.path.join(cwd, os.pardir))
+for p in (cwd, parent):
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
+# 2) Importer app de manière robuste (local d'abord, puis packagé)
+try:
+    from app import JinaScraperApp, ScrapeOptions  # local import
+except Exception:
+    from jinascraper.app import JinaScraperApp, ScrapeOptions  # package import
 
 
 @click.group()

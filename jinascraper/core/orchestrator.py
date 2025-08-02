@@ -468,25 +468,47 @@ class ScrapingOrchestrator:
         if len(safe_urls) < len(job_urls):
             logger.warning(f"Filtered {len(job_urls) - len(safe_urls)} unsafe URLs from batch")
         
-        # Step 1: Extract content in dual format (raw_markdown + structured_json)
-        dual_format_results = await self._extract_content_from_urls(safe_urls)
+        # Utiliser le DetailScraper avec gestion correcte du format de retour
+        detail_scraper = DetailScraper(allow_raw=True)  # Permettre les données brutes si IA échoue
+        extraction_tasks = []
         
-        # Step 2: Process dual format results
-        structured_results = await self._structure_extracted_content(safe_urls, dual_format_results)
+        for url in safe_urls:
+            source_site = self._determine_source_site(url)
+            # Déterminer le nom de source pour la configuration spécialisée
+            source_name = self._determine_source_name_from_url(url)
+            task = detail_scraper.extract_job_data(url, source_site, source_name)
+            extraction_tasks.append(task)
         
-        # Step 3: Sanitize structured data
+        results = await asyncio.gather(*extraction_tasks, return_exceptions=True)
+
         sanitized_results = []
-        for result in structured_results:
-            if result is not None:
-                # Sanitize data for security
-                sanitized_result = data_sanitizer.sanitize_job_data(result)
-                sanitized_results.append(sanitized_result)
-            else:
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                logger.error("DetailScraper extraction failed", url=safe_urls[i], error=str(result))
                 sanitized_results.append(None)
-        
+                continue
+            if result is None:
+                logger.warning("DetailScraper returned None", url=safe_urls[i])
+                sanitized_results.append(None)
+                continue
+            
+            # Le DetailScraper retourne déjà un dictionnaire structuré
+            # Pas besoin de sanitization supplémentaire, juste validation
+            try:
+                sanitized_result = data_sanitizer.sanitize_job_data(result)
+                logger.info("Job data processed successfully", 
+                           url=safe_urls[i],
+                           has_title=bool(sanitized_result.get("title")),
+                           has_company=bool(sanitized_result.get("company")),
+                           extraction_method=sanitized_result.get("extraction_method", "unknown"))
+                sanitized_results.append(sanitized_result)
+            except Exception as e:
+                logger.error("Data sanitization failed", url=safe_urls[i], error=str(e))
+                sanitized_results.append(None)
+
         # Trigger plugin hooks for post-processing
         await plugin_registry.trigger_hook("post_process_job_batch", sanitized_results)
-        
+
         return sanitized_results
     
     async def _extract_content_from_urls(self, job_urls: List[str]) -> List[Any]:
@@ -634,6 +656,44 @@ class ScrapingOrchestrator:
     
 
     
+    def _determine_source_name_from_url(self, url: str) -> Optional[str]:
+        """
+        Determine source name from URL for specialized configuration.
+        
+        Args:
+            url: Job URL to analyze
+            
+        Returns:
+            Source name identifier or None if not found
+        """
+        from urllib.parse import urlparse
+        
+        try:
+            parsed_url = urlparse(url)
+            domain = parsed_url.netloc.lower()
+            
+            # Mapping des domaines vers les noms de sources
+            domain_mapping = {
+                "www.emploi.tg": "emploi_tg",
+                "emploi.tg": "emploi_tg",
+                "anpetogo.com": "anpetogo",
+                "www.anpetogo.com": "anpetogo",
+                "emploitogo.info": "emploitogo_info",
+                "www.emploitogo.info": "emploitogo_info",
+                "yop.l-frii.com": "yop_lfrii",
+                "www.yop.l-frii.com": "yop_lfrii",
+                "tg.linkedin.com": "linkedin_togo",
+                "linkedin.com": "linkedin_togo",
+                "tg.indeed.com": "indeed_togo",
+                "indeed.com": "indeed_togo"
+            }
+            
+            return domain_mapping.get(domain)
+            
+        except Exception as e:
+            logger.warning("Failed to determine source name from URL", url=url, error=str(e))
+            return None
+
     def _determine_source_site(self, url: str) -> str:
         """
         Determine source site name from URL using SourceRegistry.

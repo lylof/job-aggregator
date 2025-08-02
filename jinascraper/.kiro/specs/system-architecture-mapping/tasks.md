@@ -117,14 +117,14 @@
 
 ### Phase 6 : Documentation Technique Finale
 
-- [ ] 6. Créer la documentation architecture complète
-  - Rédiger le guide d'architecture système
-  - Créer les diagrammes techniques détaillés
-  - Documenter les flux par source avec exemples
+- [x] 6. Créer la documentation architecture complète ✅ **COMPLÉTÉ**
+  - ✅ Rédiger le guide d'architecture système (jinascraper-production-specs.md)
+  - ✅ Créer les diagrammes techniques détaillés
+  - ✅ Documenter les flux par source avec exemples
   - _Requirements: 4.1, 4.2, 4.3_
 
-- [ ] 6.1 Créer le guide de maintenance et évolution
-  - Documenter les procédures d'ajout de nouvelles sources
-  - Identifier les points de modification pour évolutions
-  - Créer les guides de troubleshooting
+- [x] 6.1 Créer le guide de maintenance et évolution ✅ **COMPLÉTÉ**
+  - ✅ Documenter les procédures d'ajout de nouvelles sources
+  - ✅ Identifier les points de modification pour évolutions
+  - ✅ Créer les guides de troubleshooting
   - _Requirements: 5.3, 5.4_

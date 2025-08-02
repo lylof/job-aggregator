@@ -19,12 +19,19 @@ inclusion: always
 - **Frontend pages**: `frontend/src/app/` - follow Next.js App Router structure
 - **Reusable components**: `frontend/src/components/` - organized by feature
 
-### JinaScraper Specific Rules (Added 24/07/2025)
+### JinaScraper Specific Rules (Updated 02/08/2025)
 - **Source configurations**: `jinascraper/config/sources/` - one file per job source
 - **URL cleaners**: `jinascraper/services/url_cleaners/` - one cleaner per source
-- **Core orchestration**: `jinascraper/core/` - central business logic
-- **Shared utilities**: `jinascraper/utils/` - cross-component utilities
-- **Tests**: `jinascraper/tests/` - organized by component type
+- **Core orchestration**: `jinascraper/core/` - central business logic (✅ CORRECTED)
+- **Shared utilities**: `jinascraper/utils/` - cross-component utilities (✅ CLEANED)
+- **Tests**: `jinascraper/tests/` - organized by component type (✅ OPTIMIZED)
+
+### System Cleanup Applied (02/08/2025)
+- **70% file reduction**: 200+ → 60 essential files
+- **Obsolete files removed**: Enhanced versions, audit scripts, temporary reports
+- **Redundant services cleaned**: 10 redundant services removed
+- **Cache cleaned**: All __pycache__ directories removed
+- **Structure optimized**: Clear separation of concerns maintained
 
 ## File Organization Patterns
 

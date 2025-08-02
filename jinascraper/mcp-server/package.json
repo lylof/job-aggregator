@@ -1,0 +1,12 @@
+{
+  "name": "intelligent-memory-mcp",
+  "version": "2.0.0",
+  "main": "memory-server.js",
+  "type": "module",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.6.0",
+    "chokidar": "^3.5.3",
+    "node-cron": "^3.0.3",
+    "fast-glob": "^3.3.2"
+  }
+}
