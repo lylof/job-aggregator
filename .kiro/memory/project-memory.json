@@ -1,0 +1,14 @@
+{
+  "conversations": [
+    {
+      "date": "2025-08-03T03:04:43.961Z",
+      "content": "Test après réorganisation du serveur MCP - Vérification que le serveur fonctionne correctement depuis son nouveau emplacement dans .kiro/mcp-server/"
+    }
+  ],
+  "technical_changes": [],
+  "patterns": {},
+  "performance_metrics": [],
+  "steering_context": {},
+  "intelligent_reminders": [],
+  "auto_detected_changes": []
+}

@@ -33,8 +33,41 @@ class Config:
         self.jina_base_url: str = os.getenv("JINA_BASE_URL", "https://r.jina.ai")
         
         # Gemini API configuration
-        self.gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
+        # Supporte une ou plusieurs clés (séparées par des virgules) via GEMINI_API_KEYS.
+        # GEMINI_API_KEY reste supporté pour compatibilité.
+        raw_gemini_keys = os.getenv("GEMINI_API_KEYS", "").strip()
+        if raw_gemini_keys:
+            self.gemini_api_keys = [k.strip() for k in raw_gemini_keys.split(",") if k.strip()]
+        else:
+            single = os.getenv("GEMINI_API_KEY", "").strip()
+            self.gemini_api_keys = [single] if single else []
+        self.gemini_api_key: str = self.gemini_api_keys[0] if self.gemini_api_keys else ""
         self.gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-1.5-pro")
+        
+        # Groq API configuration
+        raw_groq_keys = os.getenv("GROQ_API_KEYS", "").strip()
+        if raw_groq_keys:
+            self.groq_api_keys = [k.strip() for k in raw_groq_keys.split(",") if k.strip()]
+        else:
+            single_groq = os.getenv("GROQ_API_KEY", "").strip()
+            self.groq_api_keys = [single_groq] if single_groq else []
+        self.groq_api_key: str = self.groq_api_keys[0] if self.groq_api_keys else ""
+        self.groq_default_model: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+        
+        # OpenRouter configuration (rotation multi-clés + entêtes d'attribution + modèles préférés)
+        raw_or_keys = os.getenv("OPENROUTER_API_KEYS", "").strip()
+        if raw_or_keys:
+            self.openrouter_api_keys = [k.strip() for k in raw_or_keys.split(",") if k.strip()]
+        else:
+            single_or = os.getenv("OPENROUTER_API_KEY", "").strip()
+            self.openrouter_api_keys = [single_or] if single_or else []
+        self.openrouter_default_model: str = os.getenv("OPENROUTER_MODEL", "deepseek/deepseek-r1:free")
+        # App Attribution headers (valeurs par défaut sûres)
+        self.openrouter_http_referer: str = os.getenv("OPENROUTER_HTTP_REFERER", "https://localhost/").strip() or "https://localhost/"
+        self.openrouter_x_title: str = os.getenv("OPENROUTER_X_TITLE", "JinaScraper Backend").strip() or "JinaScraper Backend"
+        # Modèles préférés (routing)
+        raw_pref = os.getenv("OPENROUTER_PREFERRED_MODELS", "deepseek/deepseek-r1-0528:free,deepseek/deepseek-r1:free,deepseek/deepseek-chat-v3-0324:free").strip()
+        self.openrouter_preferred_models = [m.strip() for m in raw_pref.split(",") if m.strip()]
         
         # Supabase configuration
         self.supabase_url: str = os.getenv("SUPABASE_URL", "")

@@ -31,45 +31,57 @@ class GeminiValidationError(GeminiError):
 
 
 class GeminiService:
-    """Service for structuring job data using Google Gemini AI."""
+    """Service for structuring job data using Google Gemini AI with multi-key rotation and backoff."""
     
     def __init__(self):
-        self.api_key = config.gemini_api_key
+        # Gestion multi-clés
+        self.api_keys = getattr(config, "gemini_api_keys", [])
         self.model_name = config.gemini_model
+        if not self.api_keys:
+            # fallback compat
+            single = getattr(config, "gemini_api_key", "")
+            self.api_keys = [single] if single else []
+        if not self.api_keys:
+            raise ValueError("No Gemini API key configured. Set GEMINI_API_KEYS or GEMINI_API_KEY.")
         
-        # Configure Gemini
-        genai.configure(api_key=self.api_key)
+        # État de rotation et circuit-breaker léger par clé
+        self._key_index = 0
+        self._key_failures = {k: 0 for k in self.api_keys}
+        self._key_cooldown_until = {k: 0.0 for k in self.api_keys}
+        self._cooldown_base_seconds = 30.0  # base cooldown après 429/5xx
+        self._max_cooldown_seconds = 600.0  # 10 minutes
         
-        # Initialize the model with structured output configuration
+        # Configure Gemini avec la première clé active
+        self._configure_gemini(self._current_key())
+        
+        # Modèle avec configuration de sortie structurée
         self.model = genai.GenerativeModel(
             model_name=self.model_name,
             generation_config=genai.GenerationConfig(
-                temperature=0.1,  # Low temperature for consistent extraction
+                temperature=0.1,
                 top_p=0.8,
                 top_k=40,
                 max_output_tokens=2048,
-                response_mime_type="application/json"  # Force JSON output
+                response_mime_type="application/json"
             )
         )
         
-        # Rate limiting for Gemini API
-        self.rate_limit_delay = 1.0  # 1 second between requests
+        # Rate limiting local (anti-burst)
+        self.rate_limit_delay = 1.0
         self._last_request_time = 0.0
         self._request_lock = asyncio.Lock()
         
-        logger.info("GeminiService initialized", model=self.model_name)
+        logger.info("GeminiService initialized", model=self.model_name, keys_configured=len(self.api_keys))
     
     async def _enforce_rate_limit(self):
-        """Enforce rate limiting for Gemini API."""
+        """Enforce client-side rate limiting."""
         async with self._request_lock:
-            current_time = time.time()
-            time_since_last = current_time - self._last_request_time
-            
-            if time_since_last < self.rate_limit_delay:
-                sleep_time = self.rate_limit_delay - time_since_last
+            now = time.time()
+            dt = now - self._last_request_time
+            if dt < self.rate_limit_delay:
+                sleep_time = self.rate_limit_delay - dt
                 logger.debug("Gemini rate limiting: sleeping", sleep_seconds=sleep_time)
                 await asyncio.sleep(sleep_time)
-            
             self._last_request_time = time.time()
     
     def _get_job_extraction_schema(self) -> Dict[str, Any]:
@@ -123,7 +135,7 @@ class GeminiService:
                     "items": {"type": "string"},
                     "description": "List of required skills and competencies"
                 },
-                "profile": {
+                "profile_description": {
                     "type": "string",
                     "description": "Ideal candidate profile description"
                 },
@@ -229,65 +241,86 @@ RÉPONSE (JSON valide uniquement):"""
     
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=2, min=4, max=30),
+        wait=wait_exponential(multiplier=2, min=2, max=30),
         retry=retry_if_exception_type((GeminiAPIError, Exception)),
         reraise=True
     )
     async def _make_gemini_request(self, prompt: str) -> Dict[str, Any]:
-        """Make a request to Gemini API with retry logic."""
+        """Make a request to Gemini API with retry logic and multi-key rotation."""
         await self._enforce_rate_limit()
-        
         start_time = time.time()
         
-        try:
-            logger.info("Making Gemini request", prompt_length=len(prompt))
-            
-            # Generate content using Gemini with timeout
-            response = await asyncio.wait_for(
-                asyncio.to_thread(self.model.generate_content, prompt),
-                timeout=60.0  # 60 seconds timeout
-            )
-            
-            processing_time = int((time.time() - start_time) * 1000)
-            
-            if not response.text:
-                raise GeminiAPIError("Empty response from Gemini")
-            
-            # Parse JSON response with fallback
+        # Essayer autant de clés que possible dans un tour
+        tried_keys = set()
+        last_error: Optional[Exception] = None
+        
+        for _ in range(len(self.api_keys)):
+            key = self._select_viable_key()
+            if not key or key in tried_keys:
+                break
+            tried_keys.add(key)
             try:
-                structured_data = json.loads(response.text)
-            except json.JSONDecodeError as e:
-                logger.warning("Failed to parse Gemini JSON response, attempting cleanup", 
-                             response_text=response.text[:200], error=str(e))
+                logger.info("Making Gemini request", prompt_length=len(prompt), key_index=self._key_index)
+                response = await asyncio.wait_for(
+                    asyncio.to_thread(self.model.generate_content, prompt),
+                    timeout=60.0
+                )
+                processing_time = int((time.time() - start_time) * 1000)
                 
-                # Try to clean and parse the response
-                cleaned_response = self._clean_json_response(response.text)
+                if not response.text:
+                    raise GeminiAPIError("Empty response from Gemini")
+                
                 try:
-                    structured_data = json.loads(cleaned_response)
-                    logger.info("Successfully parsed cleaned JSON response")
-                except json.JSONDecodeError:
-                    logger.error("Failed to parse even cleaned JSON response", 
-                               cleaned_response=cleaned_response[:200])
-                    raise GeminiValidationError(f"Invalid JSON response: {str(e)}")
+                    structured_data = json.loads(response.text)
+                except json.JSONDecodeError as e:
+                    logger.warning("Failed to parse Gemini JSON response, attempting cleanup",
+                                   response_text=response.text[:200], error=str(e))
+                    cleaned_response = self._clean_json_response(response.text)
+                    try:
+                        structured_data = json.loads(cleaned_response)
+                        logger.info("Successfully parsed cleaned JSON response")
+                    except json.JSONDecodeError:
+                        logger.error("Failed to parse even cleaned JSON response",
+                                     cleaned_response=cleaned_response[:200])
+                        raise GeminiValidationError(f"Invalid JSON response: {str(e)}")
+                
+                # Succès: reset des compteurs sur la clé courante
+                self._key_failures[key] = 0
+                self._key_cooldown_until[key] = 0.0
+                
+                logger.info(
+                    "Gemini request successful",
+                    processing_time_ms=processing_time,
+                    response_length=len(response.text),
+                    has_title=bool(structured_data.get("title")),
+                    has_company=bool(structured_data.get("company"))
+                )
+                return structured_data
             
-            logger.info(
-                "Gemini request successful",
-                processing_time_ms=processing_time,
-                response_length=len(response.text),
-                has_title=bool(structured_data.get("title")),
-                has_company=bool(structured_data.get("company"))
-            )
-            
-            return structured_data
-            
-        except Exception as e:
-            logger.error("Gemini request failed", error=str(e), error_type=type(e).__name__)
-            if "quota" in str(e).lower() or "rate" in str(e).lower():
-                raise GeminiAPIError(f"Rate limit or quota exceeded: {str(e)}")
-            elif "api" in str(e).lower():
-                raise GeminiAPIError(f"Gemini API error: {str(e)}")
-            else:
-                raise GeminiError(f"Unexpected error: {str(e)}")
+            except Exception as e:
+                last_error = e
+                err_text = str(e).lower()
+                is_rate = ("quota" in err_text) or ("rate" in err_text) or ("429" in err_text)
+                is_server = ("5" in err_text) or ("unavailable" in err_text)
+                
+                logger.warning("Gemini request failed on key, will rotate if possible",
+                               error=str(e), key_tail=key[-6:] if key else None)
+                
+                # Marquer la clé en échec et appliquer un cooldown exponentiel
+                self._mark_key_failure(key, is_rate or is_server)
+                
+                # Rotation vers la clé suivante viable
+                self._rotate_key()
+                # Reconfigurer le client avec la nouvelle clé (si disponible)
+                self._configure_gemini(self._current_key())
+                # Le retry decorator gère les relances globales; ici on boucle sur les clés
+                
+        # Si aucune clé n'a réussi, relancer l'erreur
+        if last_error:
+            if isinstance(last_error, GeminiError):
+                raise last_error
+            raise GeminiError(f"All Gemini keys failed: {str(last_error)}")
+        raise GeminiError("No Gemini key available to make request")
     
     def _clean_json_response(self, response_text: str) -> str:
         """Clean and fix common JSON formatting issues in Gemini responses."""
@@ -312,6 +345,48 @@ RÉPONSE (JSON valide uniquement):"""
         cleaned = re.sub(r',\s*]', ']', cleaned)  # Remove trailing commas in arrays
         
         return cleaned.strip()
+    
+    def _current_key(self) -> Optional[str]:
+        if not self.api_keys:
+            return None
+        return self.api_keys[self._key_index % len(self.api_keys)]
+    
+    def _rotate_key(self):
+        if not self.api_keys:
+            return
+        self._key_index = (self._key_index + 1) % len(self.api_keys)
+    
+    def _select_viable_key(self) -> Optional[str]:
+        """Sélectionne une clé non en cooldown, sinon None."""
+        now = time.time()
+        for i in range(len(self.api_keys)):
+            idx = (self._key_index + i) % len(self.api_keys)
+            key = self.api_keys[idx]
+            if now >= self._key_cooldown_until.get(key, 0.0):
+                # Positionner l'index sur cette clé
+                self._key_index = idx
+                # Reconfigurer avec cette clé
+                self._configure_gemini(key)
+                return key
+        return None
+    
+    def _mark_key_failure(self, key: Optional[str], backoffable: bool):
+        if not key:
+            return
+        self._key_failures[key] = self._key_failures.get(key, 0) + 1
+        if backoffable:
+            # Exponential backoff avec cap
+            cooldown = min(self._cooldown_base_seconds * (2 ** (self._key_failures[key] - 1)), self._max_cooldown_seconds)
+            self._key_cooldown_until[key] = time.time() + cooldown
+            logger.info("Applying cooldown to Gemini key", cooldown_seconds=cooldown, failures=self._key_failures[key])
+    
+    def _configure_gemini(self, key: Optional[str]):
+        if not key:
+            return
+        try:
+            genai.configure(api_key=key)
+        except Exception as e:
+            logger.warning("Gemini configure failed for key", error=str(e))
     
     def _validate_extraction_quality(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Validate and score the quality of extracted data."""

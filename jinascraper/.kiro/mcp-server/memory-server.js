@@ -16,7 +16,8 @@ const __dirname = path.dirname(__filename);
 // 🧠 INTELLIGENT MEMORY SYSTEM FOR JINASCRAPER
 class IntelligentMemorySystem {
   constructor() {
-    this.projectRoot = process.cwd();
+    // Toujours utiliser la racine du projet, maintenant depuis .kiro/mcp-server/
+    this.projectRoot = path.resolve(process.cwd(), '../..');
     this.memoryFile = path.join(this.projectRoot, '.kiro', 'memory', 'project-memory.json');
     this.steeringMemoryFile = path.join(this.projectRoot, '.kiro', 'steering', 'project-memory.md');
     this.isMonitoring = false;
@@ -902,9 +903,44 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 async function main() {
+  // Mode test : arrêt automatique après vérification
+  if (process.argv.includes('--test')) {
+    console.log('🧪 MODE TEST - Vérification du serveur MCP mémoire...');
+    
+    try {
+      const memory = memorySystem.loadMemory();
+      console.log(`✅ Mémoire chargée : ${memory.conversations?.length || 0} conversations`);
+      
+      // Test de sauvegarde
+      const testMemory = memorySystem.loadMemory();
+      testMemory.conversations.push({
+        date: new Date().toISOString(),
+        content: 'Test de fonctionnement du serveur MCP'
+      });
+      memorySystem.saveMemory(testMemory);
+      console.log('✅ Sauvegarde testée avec succès');
+      
+      console.log('🎉 Serveur MCP mémoire fonctionne correctement !');
+      process.exit(0);
+    } catch (error) {
+      console.error('❌ Erreur lors du test :', error.message);
+      process.exit(1);
+    }
+  }
+  
+  // Mode normal : serveur MCP actif
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error('🧠 Intelligent Memory System démarré - Toutes les fonctionnalités activées !');
+  
+  // Gestion propre de l'arrêt
+  process.on('SIGINT', () => {
+    console.error('🛑 Arrêt du serveur MCP mémoire...');
+    if (memorySystem.watcher) {
+      memorySystem.watcher.close();
+    }
+    process.exit(0);
+  });
 }
 
 main().catch(console.error);

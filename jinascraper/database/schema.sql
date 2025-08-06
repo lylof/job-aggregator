@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     
     -- Constraints
     CONSTRAINT valid_quality_score CHECK (quality_score >= 0 AND quality_score <= 1),
-    CONSTRAINT valid_extraction_method CHECK (extraction_method IN ('jina', 'gemini', 'crawl4ai', 'manual')),
+    CONSTRAINT valid_extraction_method CHECK (extraction_method IN ('jina', 'gemini', 'crawl4ai', 'manual', 'heuristic')),
     CONSTRAINT valid_dates CHECK (application_deadline IS NULL OR posted_date IS NULL OR application_deadline >= posted_date)
 );
 

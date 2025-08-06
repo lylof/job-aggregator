@@ -33,6 +33,11 @@ class ScrapeOptions:
     quiet: bool = False                 # --quiet
     show_urls: int = 3                  # --show-urls
     use_colors: bool = True             # --no-color (inverted)
+    
+    # 🚀 NOUVELLES OPTIONS POUR FILTRAGE TEMPOREL
+    recent_only: bool = False           # --recent-only
+    max_age_hours: Optional[int] = None # --max-age-hours
+    force_all: bool = False             # --force-all
 
 
 @dataclass
@@ -82,7 +87,7 @@ class JinaScraperApp:
         )
         
         # Print startup header
-        self.enhanced_logger.print_header("JINASCRAPER - DÉMARRAGE")
+        self.enhanced_logger.print_header("JINASCRAPER - DEMARRAGE")
         
         # Print configuration
         config = {
@@ -101,12 +106,23 @@ class JinaScraperApp:
                 # Pass enhanced logger to orchestrator
                 orchestrator.set_enhanced_logger(self.enhanced_logger)
                 
+                # 🚀 NOUVEAU : Passer les options de scraping pour le filtrage temporel
+                orchestrator.scrape_options = options
+                
                 # Configure orchestrator based on options
                 if options.sources:
                     self.enhanced_logger.print_info(f"Filtrage des sources: {options.sources}")
                 
                 if options.dry_run:
                     self.enhanced_logger.print_info("Mode dry-run activé - aucune donnée ne sera sauvegardée")
+                
+                # 🚀 NOUVEAU : Afficher les options de filtrage temporel
+                if options.recent_only:
+                    self.enhanced_logger.print_info("🕒 Mode recent-only activé - filtrage depuis le dernier scraping")
+                elif options.max_age_hours:
+                    self.enhanced_logger.print_info(f"🕒 Filtrage temporel activé - max {options.max_age_hours}h")
+                elif options.force_all:
+                    self.enhanced_logger.print_info("🚀 Mode force-all activé - tous les jobs seront traités")
                 
                 # Execute the scraping cycle with source filtering
                 scraping_result = await orchestrator.run_full_cycle(sources_filter=options.sources)

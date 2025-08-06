@@ -645,14 +645,16 @@ jinascraper/
 ## 🚨 Points d'Attention Critiques
 
 ### Problèmes Bloquants Identifiés
-1. **Stage 2 Pipeline** : 0% de succès, méthode `_structure_extracted_content()` défaillante
-2. **APIs IA** : Gemini quota dépassé, OpenRouter timeouts
-3. **URL Cleaner emploi.tg** : Non trouvé par le registry
+1. **✅ RÉSOLU** : Problème critique de mapping `profile` → `profile_description`
+2. **✅ ARCHITECTURE** : Solution multi-sources universelle validée
+3. **APIs IA** : Gemini quota dépassé, OpenRouter timeouts (solutions identifiées)
+4. **Implémentation** : Spec créée, prête pour développement
 
-### Solutions Durables Recherchées
-- **Rotation APIs** : Multi-clés Jina (5×10M tokens), Gemini (5×50 req/jour)
-- **Proxy Gemini** : Deno Deploy avec rotation automatique
-- **OpenRouter Fix** : Configuration corrigée, modèles gratuits identifiés
+### Solutions Validées et Documentées
+- **✅ Architecture Multi-Sources** : Schéma universel + métadonnées JSONB
+- **✅ Mapping Universel** : Correction `profile` → `profile_description` + 6 sources
+- **✅ Zéro Perte de Données** : extraction_metadata + raw_data backup
+- **Rotation APIs** : Multi-clés Jina (5×10M tokens), Gemini (5×50 req/jour) - solutions identifiées
 
 ## 📊 Métriques de Qualité Continue
 

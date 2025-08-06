@@ -11,7 +11,7 @@ from ..services.listing_scraper import ListingScraper
 from ..services.detail_scraper import DetailScraper
 from ..services.gemini_service import GeminiService
 from ..services.cache_manager import CacheManager
-# from ..services.database_service import DatabaseService  # Temporairement désactivé
+from ..services.database_service import DatabaseService
 from ..config import SourceRegistry
 from ..models import ScrapingResult, ExtractionMethod
 from .performance import performance_tracked, batch_processor, performance_monitor
@@ -54,6 +54,7 @@ class ScrapingOrchestrator:
             JinaContentExtractorAdapter,
             GeminiJobStructurerAdapter,
             RedisCacheManagerAdapter,
+            DatabaseServiceAdapter,
             MockDatabaseServiceAdapter
         )
         from ..services.jina_client import JinaClient
@@ -64,7 +65,7 @@ class ScrapingOrchestrator:
         self.content_extractor = content_extractor or JinaContentExtractorAdapter(JinaClient())
         self.job_structurer = job_structurer or GeminiJobStructurerAdapter(GeminiService())
         self.cache_manager = cache_manager or RedisCacheManagerAdapter(CacheManager())
-        self.database_service = database_service or MockDatabaseServiceAdapter()
+        self.database_service = database_service or DatabaseServiceAdapter(DatabaseService())
         
         # Orchestrator state
         self.current_cycle_id = None
@@ -156,6 +157,9 @@ class ScrapingOrchestrator:
             
             # Update scraping statistics
             await self._update_scraping_stats(cycle_result)
+            
+            # 🚀 NOUVEAU : Mettre à jour les timestamps pour le filtrage temporel
+            await self._update_temporal_timestamps(sources_filter)
             
             logger.info(
                 "Full scraping cycle completed",
@@ -409,12 +413,22 @@ class ScrapingOrchestrator:
         
         # Save structured jobs to database
         if all_structured_jobs:
-            # save_result = await self.database_service.upsert_jobs_batch(all_structured_jobs)  # Temporairement désactivé
-            save_result = {"success": len(all_structured_jobs), "errors": 0}  # Mock pour les tests
+            # Determine source name from the first job's URL or use 'emploi_tg' as default
+            source_name = 'emploi_tg'  # Default for now, can be improved later
+            if all_structured_jobs and 'source_url' in all_structured_jobs[0]:
+                url = all_structured_jobs[0]['source_url']
+                if 'emploi.tg' in url:
+                    source_name = 'emploi_tg'
+                elif 'linkedin.com' in url:
+                    source_name = 'linkedin_togo'
+                elif 'indeed.com' in url:
+                    source_name = 'indeed_togo'
+            
+            save_result = await self.database_service.upsert_jobs_batch(all_structured_jobs, source_name)
             logger.info(
-                "Jobs saved to database (MOCK)",
+                "Jobs saved to database",
                 cycle_id=self.current_cycle_id,
-                saved=save_result.get("success", 0),
+                saved=save_result.get("saved_jobs", 0),
                 errors=save_result.get("errors", 0)
             )
         
@@ -469,14 +483,17 @@ class ScrapingOrchestrator:
             logger.warning(f"Filtered {len(job_urls) - len(safe_urls)} unsafe URLs from batch")
         
         # Utiliser le DetailScraper avec gestion correcte du format de retour
-        detail_scraper = DetailScraper(allow_raw=True)  # Permettre les données brutes si IA échoue
+        # 🚀 NOUVEAU : Passer le cache_manager pour le filtrage temporel
+        cache_manager_instance = self.cache_manager.cache_manager if hasattr(self.cache_manager, 'cache_manager') else None
+        detail_scraper = DetailScraper(allow_raw=True, cache_manager=cache_manager_instance)
         extraction_tasks = []
         
         for url in safe_urls:
             source_site = self._determine_source_site(url)
             # Déterminer le nom de source pour la configuration spécialisée
             source_name = self._determine_source_name_from_url(url)
-            task = detail_scraper.extract_job_data(url, source_site, source_name)
+            # 🚀 NOUVEAU : Passer les options de scraping pour le filtrage temporel
+            task = detail_scraper.extract_job_data(url, source_site, source_name, scrape_options=getattr(self, 'scrape_options', None))
             extraction_tasks.append(task)
         
         results = await asyncio.gather(*extraction_tasks, return_exceptions=True)
@@ -793,8 +810,8 @@ class ScrapingOrchestrator:
                 "error_details": {"errors": cycle_result.errors} if cycle_result.errors else None
             }
             
-            # await self.database_service.update_scraping_stats(stats_data)  # Temporairement désactivé
-            logger.info("Scraping stats update skipped (database service disabled)")
+            await self.database_service.update_scraping_stats(stats_data)
+            logger.info("Scraping stats updated in database")
             
         except Exception as e:
             logger.error("Failed to update scraping stats", error=str(e))
@@ -811,3 +828,48 @@ class ScrapingOrchestrator:
     async def trigger_plugin_hook(self, hook_name: str, *args, **kwargs) -> List[Any]:
         """Trigger a plugin hook."""
         return await plugin_registry.trigger_hook(hook_name, *args, **kwargs)
+    
+    async def _update_temporal_timestamps(self, sources_filter: Optional[List[str]] = None):
+        """
+        Mettre à jour les timestamps de scraping pour le filtrage temporel.
+        
+        Args:
+            sources_filter: Liste des sources traitées
+        """
+        try:
+            # Importer le service de filtrage temporel
+            from ..services.temporal_filter import TemporalFilterService
+            
+            # Obtenir le cache manager
+            cache_manager_instance = self.cache_manager.cache_manager if hasattr(self.cache_manager, 'cache_manager') else None
+            
+            if not cache_manager_instance:
+                logger.warning("No cache manager available for temporal timestamp update")
+                return
+            
+            # Créer le service de filtrage temporel
+            temporal_filter = TemporalFilterService(cache_manager_instance)
+            
+            # Déterminer les sources à mettre à jour
+            if sources_filter:
+                sources_to_update = sources_filter
+            else:
+                # Obtenir toutes les sources actives
+                from ..config import SourceRegistry
+                all_sources = SourceRegistry.get_active_sources()
+                sources_to_update = list(all_sources.keys())
+            
+            # Mettre à jour le timestamp pour chaque source
+            current_time = datetime.utcnow()
+            for source_name in sources_to_update:
+                await temporal_filter.update_last_scraping_time(source_name, current_time)
+                logger.debug("Temporal timestamp updated", 
+                           source=source_name, 
+                           timestamp=current_time.isoformat())
+            
+            logger.info("Temporal timestamps updated for all sources", 
+                       sources_count=len(sources_to_update),
+                       timestamp=current_time.isoformat())
+            
+        except Exception as e:
+            logger.error("Failed to update temporal timestamps", error=str(e))

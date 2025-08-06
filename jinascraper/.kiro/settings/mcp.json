@@ -17,7 +17,9 @@
       ],
       "env": {
         "API_KEY": "sk-user-etN07j8lQz6YZzHfp9IDwXU1U24gqoiCgtLmD9G48q9u9AOBhPmlXrjLBYEA1-0DypqOVf7zdkrZam3awhM0rJ8za3KX5zvjNRqslwP6NXqeoX27jk79ng5-8aLSYo7imUQ"
-      }
+      },
+      "disabled": false,
+      "autoApprove": []
     },
     "fetch": {
       "command": "uvx",
@@ -35,7 +37,9 @@
       ],
       "env": {
         "JINA_API_KEY": "jina_98c08aaa007245e697294baf670d7f2bJDyQNuecSwxW9jo8r0h6gsFh7-yU"
-      }
+      },
+      "disabled": false,
+      "autoApprove": []
     },
     "prisma-mcp-server": {
       "command": "npx",
@@ -44,7 +48,9 @@
         "prisma",
         "mcp"
       ],
-      "env": {}
+      "env": {},
+      "disabled": false,
+      "autoApprove": []
     },
     "sequential-thinking": {
       "command": "npx",
@@ -52,13 +58,37 @@
         "-y",
         "@modelcontextprotocol/server-sequential-thinking"
       ],
-      "env": {}
+      "env": {},
+      "disabled": false,
+      "autoApprove": []
     },
     "memory": {
       "command": "node",
       "args": [
-        "C:\\Users\\Lylof\\CascadeProjects\\job-aggregator\\jinascraper\\mcp-server\\memory-server.js"
+        ".kiro/mcp-server/memory-server-complete.js"
+      ],
+      "disabled": false,
+      "autoApprove": [
+        "get_memory",
+        "save_memory",
+        "save_bug_fix",
+        "save_feature",
+        "save_config",
+        "save_test_result",
+        "save_performance_metric",
+        "search_memory"
       ]
+    },
+    "supabase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@supabase/mcp-server-supabase@latest",
+        "--access-token",
+        "sbp_654fde433c24081beb7a281c5d1072a1bce10c59"
+      ],
+      "disabled": false,
+      "autoApprove": []
     }
   }
 }

@@ -14,6 +14,7 @@ from ..services.listing_scraper import ListingScraper
 from ..services.detail_scraper import DetailScraper
 from ..services.gemini_service import GeminiService
 from ..services.cache_manager import CacheManager
+from ..services.database_service import DatabaseService
 
 logger = structlog.get_logger(__name__)
 
@@ -167,6 +168,62 @@ class RedisCacheManagerAdapter(CacheManagerInterface):
         except Exception as e:
             logger.error(f"URL filtering failed for source {source_name}: {str(e)}")
             return urls  # Return all URLs if filtering fails
+
+
+class DatabaseServiceAdapter(DatabaseServiceInterface):
+    """Adapter for Supabase database service."""
+    
+    def __init__(self, database_service: DatabaseService):
+        self.database_service = database_service
+    
+    async def upsert_job(self, job_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Upsert a job offer to the database.
+        
+        Args:
+            job_data: Job data to upsert
+            
+        Returns:
+            Job record from database or None if failed
+        """
+        try:
+            return await self.database_service.upsert_job(job_data)
+        except Exception as e:
+            logger.error(f"Database upsert failed: {str(e)}")
+            return None
+    
+    async def upsert_jobs_batch(self, jobs_data: List[Dict[str, Any]], source_name: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Batch upsert jobs to the database.
+        
+        Args:
+            jobs_data: List of job data to upsert
+            source_name: Optional source identifier to pass to the database layer
+            
+        Returns:
+            Batch operation results
+        """
+        try:
+            return await self.database_service.upsert_jobs_batch(jobs_data, source_name)
+        except Exception as e:
+            logger.error(f"Database batch upsert failed: {str(e)}")
+            return {"success": 0, "errors": len(jobs_data), "total": len(jobs_data)}
+    
+    async def update_scraping_stats(self, stats_data: Dict[str, Any]) -> bool:
+        """
+        Update scraping statistics in the database.
+        
+        Args:
+            stats_data: Statistics data to update
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            return await self.database_service.update_scraping_stats(stats_data)
+        except Exception as e:
+            logger.error(f"Database stats update failed: {str(e)}")
+            return False
 
 
 class MockDatabaseServiceAdapter(DatabaseServiceInterface):

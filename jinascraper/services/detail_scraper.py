@@ -11,6 +11,7 @@ from ..models import JobOffer, ExtractionMethod, ExtractionMetadata
 from .jina_client import JinaClient
 from .gemini_service import GeminiService
 from .openrouter_service import OpenRouterService
+from .temporal_filter import TemporalFilterService
 import os
 
 
@@ -20,17 +21,23 @@ logger = structlog.get_logger(__name__)
 class DetailScraper:
     """Service for extracting structured job data from job pages (Stage 2)."""
     
-    def __init__(self, jina_client: Optional[JinaClient] = None, allow_raw: Optional[bool] = None):
+    def __init__(self, jina_client: Optional[JinaClient] = None, allow_raw: Optional[bool] = None, cache_manager=None):
         """
         Initialize the DetailScraper.
         
         Args:
             jina_client: Optional JinaClient instance. If not provided, a new one will be created.
             allow_raw: Accept raw markdown when structuring fails (overrides ALLOW_RAW_ONLY env)
+            cache_manager: Cache manager for temporal filtering
         """
         self.jina_client = jina_client or JinaClient()
         self.gemini = GeminiService()
+        self.groq = None  # Lazy loading; will instantiate just-in-time
         self.fallback = OpenRouterService()
+        
+        # 🚀 NOUVEAU : Service de filtrage temporel
+        self.temporal_filter = TemporalFilterService(cache_manager) if cache_manager else None
+        
         # Allow-raw flag via arg or env
         if allow_raw is None:
             env_val = os.getenv("ALLOW_RAW_ONLY", "0").lower()
@@ -54,7 +61,8 @@ class DetailScraper:
         job_url: str, 
         source_site: str,
         source_name: Optional[str] = None,
-        use_reader_lm: bool = True
+        use_reader_lm: bool = True,
+        scrape_options: Optional[Any] = None  # 🚀 NOUVEAU : Options de scraping
     ) -> Optional[Dict[str, Any]]:
         """
         Extract structured job data from a job posting URL using Jina Reader.
@@ -113,6 +121,17 @@ class DetailScraper:
                 logger.warning("No content extracted from job page", url=job_url)
                 return None
             
+            # 🚀 NOUVEAU : Filtrage temporel intelligent
+            if self.temporal_filter and scrape_options and source_name:
+                should_process = await self.temporal_filter.should_process_job(
+                    content, job_url, source_name, scrape_options
+                )
+                
+                if not should_process:
+                    logger.info("Job filtered out by temporal filter - skipping AI processing", 
+                               url=job_url, source=source_name)
+                    return None  # ✅ ÉCONOMIE MASSIVE DE TOKENS ICI !
+            
             processing_time = int((time.time() - start_time) * 1000)
             
             # Create extraction metadata
@@ -125,22 +144,69 @@ class DetailScraper:
             # First-pass regex parsing (baseline)
             job_data = self._parse_job_content(content, job_url, metadata)
 
-            # Try Gemini structuring to improve quality (threshold lowered in GeminiService)
+            # Orchestration LLM strict (ordre: Groq → Gemini → OpenRouter), heuristique en dernier recours
             structured = None
-            try:
-                structured = await self.gemini.structure_job_data(content, job_url, source_site)
-            except Exception as e:
-                logger.warning("Gemini structuring raised exception, will try fallback", url=job_url, error=str(e))
 
-            # Fallback LLM if Gemini failed
-            if not structured:
+            # 1) Groq d'abord (lazy init défensive)
+            if self.groq is None:
                 try:
-                    structured = await self.fallback.structure_job_data(content, job_url)
+                    from .groq_service import GroqService  # import local pour éviter problèmes d'import au démarrage
+                    self.groq = GroqService()
+                    logger.info("GroqService initialized successfully", models=len(self.groq.models), keys=len(self.groq.api_keys))
                 except Exception as e:
-                    logger.error("LLM fallback failed with exception", url=job_url, error=str(e))
+                    logger.error("GroqService initialization failed; will continue with Gemini then OpenRouter", 
+                               error=str(e), error_type=type(e).__name__)
+                    self.groq = None
+            if self.groq is not None and structured is None:
+                try:
+                    logger.info("Attempting structuring with Groq first", url=job_url, source_site=source_site)
+                    structured = await self.groq.structure_job_data(content, job_url, source_site)
+                    logger.info("Groq structuring successful", url=job_url)
+                except Exception as e:
+                    logger.warning("Groq structuring failed; will try Gemini", url=job_url, error=str(e))
+
+            # 2) Gemini ensuite
+            if structured is None:
+                try:
+                    logger.info("Attempting structuring with Gemini", url=job_url, source_site=source_site)
+                    structured = await self.gemini.structure_job_data(content, job_url, source_site)
+                    logger.info("Gemini structuring successful", url=job_url)
+                except Exception as e:
+                    logger.warning("Gemini structuring failed; will try OpenRouter", url=job_url, error=str(e))
+
+            # 3) OpenRouter enfin (avant heuristique)
+            if structured is None:
+                try:
+                    logger.info("Attempting structuring with OpenRouter", url=job_url, source_site=source_site)
+                    structured = await self.fallback.structure_job_data(content, job_url, source_site)
+                    logger.info("OpenRouter structuring successful", url=job_url)
+                except Exception as e:
+                    logger.error("OpenRouter structuring failed; will consider heuristic fallback", url=job_url, error=str(e))
                     structured = None
 
-            # Merge structured fields when available
+            # If LLMs failed, try heuristic fallback
+            if not structured:
+                heuristic = self._heuristic_extract(content)
+                if heuristic:
+                    # Merge heuristic fields into baseline
+                    merged = {**job_data}
+                    for k, v in heuristic.items():
+                        if v and k:
+                            merged[k] = v
+                    merged["structured_json"] = {"heuristic": heuristic}
+                    merged["extraction_method"] = "heuristic"
+                    # annotate metadata fallback
+                    try:
+                        em = merged.get("extraction_metadata") or {}
+                        if isinstance(em, dict):
+                            em["fallback"] = "heuristic"
+                            merged["extraction_metadata"] = em
+                    except Exception:
+                        pass
+                    job_data = merged
+                    structured = heuristic  # mark as obtained
+
+            # Merge structured fields when available (LLM or heuristic)
             if structured and isinstance(structured, dict):
                 merged = {**job_data}
                 # Prefer structured fields if present
@@ -149,8 +215,10 @@ class DetailScraper:
                     if k in structured and structured[k]:
                         merged[k] = structured[k]
                 # Attach raw structured payload and quality info if provided
-                merged["structured_json"] = structured
-                merged["extraction_method"] = structured.get("extraction_method", ExtractionMethod.GEMINI)
+                if "structured_json" not in merged:
+                    merged["structured_json"] = structured
+                if merged.get("extraction_method") is None:
+                    merged["extraction_method"] = structured.get("extraction_method", ExtractionMethod.GEMINI)
                 job_data = merged
 
             # If still no structured and allow_raw enabled, keep raw record
@@ -160,6 +228,14 @@ class DetailScraper:
                     "quality_issues": ["structured_json_missing_allow_raw"],
                     "field_coverage": {}
                 })
+                # annotate fallback in metadata
+                try:
+                    em = job_data.get("extraction_metadata") or {}
+                    if isinstance(em, dict):
+                        em["fallback"] = "raw_only"
+                        job_data["extraction_metadata"] = em
+                except Exception:
+                    pass
                 job_data["extraction_method"] = "raw_only"
 
             logger.info(
@@ -454,6 +530,63 @@ class DetailScraper:
                     return profile[:800]  # Limit to 800 chars
         
         return None
+
+    def _heuristic_extract(self, raw_text: str) -> Optional[Dict[str, Any]]:
+        """
+        Heuristic extractor to structure minimal fields without any LLM.
+        Targets: title, company, location, contract_type, application_deadline, description, profile.
+        """
+        if not raw_text or len(raw_text) < 20:
+            return None
+
+        text = raw_text
+
+        # Title
+        title = self._extract_title_enhanced(text)
+        if not title:
+            m = re.search(r'Poste proposé\s*:\s*([^\n]+)', text, re.IGNORECASE)
+            title = m.group(1).strip() if m else None
+
+        # Company
+        company = self._extract_company_enhanced(text)
+
+        # Location
+        location = self._extract_location(text)
+
+        # Contract type
+        contract_type = self._extract_contract_type(text)
+
+        # Deadline: dd/mm/yyyy or variants with month names in French
+        deadline = None
+        m1 = re.search(r'(?:Date\s+limite|Deadline|Expire(?:r)?(?:\s*le)?|Clôture(?:\s*le)?)\s*[:\-]?\s*([0-3]?\d[\/\-\.\s](?:0?\d|janv\.?|févr\.?|mars|avr\.?|mai|juin|juil\.?|août|sept\.?|oct\.?|nov\.?|déc\.?)[\/\-\.\s]\d{2,4})', text, re.IGNORECASE)
+        if m1:
+            deadline = m1.group(1).strip()
+        else:
+            m2 = re.search(r'\b([0-3]?\d[\/\-\.](0?\d|\d{1,2})[\/\-\.]\d{2,4})\b', text)
+            if m2:
+                deadline = m2.group(1).strip()
+
+        # Description
+        description = self._extract_description(text)
+        if not description:
+            # Fallback: first long paragraph
+            paras = [p.strip() for p in re.split(r'\n{2,}', text) if len(p.strip()) > 80]
+            description = paras[0][:1000] if paras else None
+
+        # Profile
+        profile = self._extract_profile(text)
+
+        # Build result
+        result: Dict[str, Any] = {}
+        if title: result["title"] = title
+        if company: result["company"] = company
+        if location: result["location"] = location
+        if contract_type: result["contract_type"] = contract_type
+        if deadline: result["application_deadline"] = deadline
+        if description: result["description"] = description
+        if profile: result["profile"] = profile
+
+        return result if result else None
     
     def _extract_title(self, lines: List[str]) -> Optional[str]:
         """Extract job title from content lines."""

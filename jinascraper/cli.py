@@ -5,6 +5,8 @@ import asyncio
 import sys
 import os
 import click
+from pathlib import Path
+from dotenv import load_dotenv
 
 # Exécution depuis le repo (script direct) ET depuis package (python -m jinascraper.cli)
 # 1) Ajouter le répertoire courant et le parent au PYTHONPATH si nécessaire
@@ -13,6 +15,21 @@ parent = os.path.abspath(os.path.join(cwd, os.pardir))
 for p in (cwd, parent):
     if p not in sys.path:
         sys.path.insert(0, p)
+
+# 2) CORRECTION CRITIQUE: Charger les variables d'environnement
+env_paths = [
+    Path(cwd) / ".env",  # jinascraper/.env
+    Path(parent) / ".env",  # root .env
+    ".env"  # current directory
+]
+
+for env_path in env_paths:
+    if Path(env_path).exists():
+        load_dotenv(env_path)
+        print(f"🔧 Variables d'environnement chargées depuis {env_path}")
+        break
+else:
+    print("⚠️  Aucun fichier .env trouvé")
 
 # 2) Importer app de manière robuste (local d'abord, puis packagé)
 try:
@@ -35,7 +52,11 @@ def cli():
 @click.option('--quiet', is_flag=True, help='Minimal logging output')
 @click.option('--show-urls', default=3, help='Number of sample URLs to display')
 @click.option('--no-color', is_flag=True, help='Disable colored output')
-def scrape(sources, max_urls, dry_run, verbose, quiet, show_urls, no_color):
+# 🚀 NOUVELLES OPTIONS POUR FILTRAGE TEMPOREL
+@click.option('--recent-only', is_flag=True, help='Only process jobs published since last scraping (production mode)')
+@click.option('--max-age-hours', type=int, help='Maximum age of jobs in hours (overrides recent-only)')
+@click.option('--force-all', is_flag=True, help='Process all jobs ignoring temporal filters (development mode)')
+def scrape(sources, max_urls, dry_run, verbose, quiet, show_urls, no_color, recent_only, max_age_hours, force_all):
     """Execute a full scraping cycle."""
     sources_list = sources.split(',') if sources else None
     options = ScrapeOptions(
@@ -45,7 +66,11 @@ def scrape(sources, max_urls, dry_run, verbose, quiet, show_urls, no_color):
         verbose=verbose,
         quiet=quiet,
         show_urls=show_urls,
-        use_colors=not no_color
+        use_colors=not no_color,
+        # 🚀 NOUVELLES OPTIONS TEMPORELLES
+        recent_only=recent_only,
+        max_age_hours=max_age_hours,
+        force_all=force_all
     )
     app = JinaScraperApp()
     
@@ -58,7 +83,7 @@ def scrape(sources, max_urls, dry_run, verbose, quiet, show_urls, no_color):
         click.echo("\n⚠️  Scraping interrupted by user")
         sys.exit(1)
     except Exception as e:
-        click.echo(f"❌ Fatal error: {str(e)}")
+        click.echo(f"FATAL ERROR: {str(e)}")
         sys.exit(1)
 
 

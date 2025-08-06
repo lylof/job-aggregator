@@ -10,6 +10,7 @@ class ExtractionMethod(str, Enum):
     """Methods used for job data extraction."""
     JINA = "jina"
     GEMINI = "gemini"
+    GROQ = "groq"
     CRAWL4AI = "crawl4ai"
     MANUAL = "manual"
 
